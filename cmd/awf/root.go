@@ -13,6 +13,6 @@ func newRoot() *cobra.Command {
 		Version:       version,
 	}
 	root.SetVersionTemplate("awf {{.Version}}\n")
-	root.AddCommand(newLs())
+	root.AddCommand(newLs(), newValidate())
 	return root
 }

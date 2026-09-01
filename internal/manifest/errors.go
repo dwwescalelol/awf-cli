@@ -24,3 +24,12 @@ func wrap(segment string, err error) error {
 	}
 	return &ParseError{Path: "/" + segment, Err: err}
 }
+
+// ValidationError reports what is wrong at one place in the document. Path is
+// a slash separated pointer to the offending node, in the style of ParseError.
+type ValidationError struct {
+	Path string
+	Msg  string
+}
+
+func (e *ValidationError) Error() string { return "invalid " + e.Path + ": " + e.Msg }

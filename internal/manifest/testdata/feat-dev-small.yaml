@@ -1,0 +1,111 @@
+openawf: 0.1.0
+name: feat-dev-small
+summary: Take an approved plan and run it to a reviewed diff in an isolated worktree, then tear down.
+model: claude-sonnet-5
+version: 0.3.0
+sha: sha256-1a49a9a0c0c2b0b7a3e5f9d8c7b6a5f4e3d2c1b0f1e2d3c4b5a6978869504132
+
+start: worktree-setup
+orchestration:
+  worktree-setup: setup-stack
+  setup-stack: create-diff
+  create-diff: testing
+  testing:
+    pass: agentic-review
+    fail:
+      task: create-diff
+      retries: 2
+      session: resume
+  agentic-review:
+    pass: teardown-stack
+  teardown-stack: remove-worktree
+  remove-worktree: null
+
+tasks:
+  worktree-setup:
+    version: 2.2.1
+    sha: sha256-d24bb1e8cc06bb3839ea944eeeea3dd32e96e1bb0011223344556677889900aa
+    summary: Create an isolated git worktree for this task.
+    input:
+      type: object
+      properties:
+        plan:
+          type: string
+      required: [plan]
+    body: |
+      # Worktree Setup
+
+      Create a dedicated git worktree for this task, isolated from the main
+      checkout and any other in-flight work. Return the worktree path and the
+      plan unchanged so the following tasks can act on it.
+
+  setup-stack:
+    version: 1.4.0
+    sha: sha256-e5f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0
+    summary: Bring up a local stack scoped to this worktree.
+    body: |
+      # Setup Stack
+
+      Bring up a full local stack scoped entirely to this worktree through the
+      setup-stack port. The stack is self-contained and shares nothing with
+      other environments. If it fails it can be retried without recreating the
+      worktree. Return the stack details and the plan.
+
+  create-diff:
+    version: 3.0.1
+    sha: sha256-a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2
+    summary: Implement the plan against the worktree as a committed diff.
+    body: |
+      # Create Diff
+
+      Implement the approved plan against the isolated worktree, producing the
+      change as a diff committed to the task's branch. If this task received
+      test failures as input, correct the diff to address them. Return the diff.
+
+  testing:
+    version: 2.1.0
+    sha: sha256-b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3
+    summary: Run compile, unit, integration, and e2e checks on the diff.
+    outcomes: [pass, fail]
+    body: |
+      # Testing
+
+      Validate the diff through four checks in order: compile, unit tests,
+      integration tests, e2e tests. If any check fails, emit `fail` and return
+      the failures so the diff can be corrected. Only if all four pass, emit
+      `pass` and return the diff.
+
+  agentic-review:
+    version: 1.2.3
+    sha: sha256-c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4
+    summary: Review the passing diff for correctness and quality.
+    outcomes: [pass]
+    body: |
+      # Agentic Review
+
+      Review the diff for correctness, quality, and adherence to the plan.
+      Catch design problems, missed requirements, and risky changes that the
+      tests do not. Emit `pass` and return the diff.
+
+  teardown-stack:
+    version: 1.4.0
+    sha: sha256-d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5
+    summary: Tear down the stack brought up for this worktree.
+    body: |
+      # Teardown Stack
+
+      Tear down the stack through the teardown-stack port: stop its processes,
+      drop its database, and remove its generated config. Return confirmation.
+
+  remove-worktree:
+    version: 2.0.0
+    sha: sha256-e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6
+    summary: Remove the git worktree, leaving the branch intact.
+    body: |
+      # Remove Worktree
+
+      Remove the git worktree. This deletes the working checkout only; the
+      branch and its committed diff remain in the repository. Return confirmation.
+
+x-meta:
+  sha: null

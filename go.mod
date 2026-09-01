@@ -4,7 +4,9 @@ go 1.25.6
 
 require (
 	github.com/goccy/go-yaml v1.19.2
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 	github.com/spf13/cobra v1.10.2
+	golang.org/x/text v0.14.0
 )
 
 require (

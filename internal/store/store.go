@@ -3,9 +3,11 @@ package store
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -135,4 +137,46 @@ func (s Scope) versions(kind Kind, id string) ([]string, error) {
 func isDir(path string) bool {
 	fi, err := os.Stat(path)
 	return err == nil && fi.IsDir()
+}
+
+// Latest is the highest version stored under an id. Versions sort numerically,
+// so 0.10.0 beats 0.9.0.
+func (s Scope) Latest(kind Kind, id string) (string, error) {
+	versions, err := s.versions(kind, id)
+	if errors.Is(err, fs.ErrNotExist) || len(versions) == 0 {
+		return "", fmt.Errorf("no %s %q is installed in %s", kind, id, s.Dir)
+	}
+	if err != nil {
+		return "", err
+	}
+	latest := versions[0]
+	for _, v := range versions[1:] {
+		if compareVersions(v, latest) > 0 {
+			latest = v
+		}
+	}
+	return latest, nil
+}
+
+// compareVersions orders dotted numbers. A component that is not a number
+// sorts below one that is, so a stray filename never wins.
+func compareVersions(a, b string) int {
+	as, bs := strings.Split(a, "."), strings.Split(b, ".")
+	for i := 0; i < max(len(as), len(bs)); i++ {
+		if c := component(as, i) - component(bs, i); c != 0 {
+			return c
+		}
+	}
+	return strings.Compare(a, b)
+}
+
+func component(parts []string, i int) int {
+	if i >= len(parts) {
+		return 0
+	}
+	n, err := strconv.Atoi(parts[i])
+	if err != nil {
+		return -1
+	}
+	return n
 }

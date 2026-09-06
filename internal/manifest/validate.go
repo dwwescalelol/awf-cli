@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+
+	"github.com/dwwescalelol/awf-cli/internal/awf"
 )
 
 // Validate reports everything wrong with the document, so one call answers the
@@ -35,6 +37,36 @@ func (w *Workflow) Validate() error {
 		v.failf("version", "%v", err)
 	}
 	return errors.Join(v...)
+}
+
+// Graph reports what is wrong with the machine the document describes: no task
+// ends the flow, or tasks the flow can enter but never leave. It assumes the
+// document validates, so call Validate first.
+func (w *Workflow) Graph() error {
+	var v checks
+	for _, err := range unjoin(w.Build().Check()) {
+		var trap *awf.TrapError
+		switch {
+		case errors.Is(err, awf.ErrNoTerminal):
+			v.failf("orchestration", "no task ends the flow, so it can never finish")
+		case errors.As(err, &trap):
+			v.failf("orchestration/"+trap.State.Task.Name, "the flow can never leave this task")
+		default:
+			v = append(v, err)
+		}
+	}
+	return errors.Join(v...)
+}
+
+// unjoin splits an error joined by errors.Join back into its parts.
+func unjoin(err error) []error {
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		return joined.Unwrap()
+	}
+	if err == nil {
+		return nil
+	}
+	return []error{err}
 }
 
 // node checks that a transition leaves for somewhere real, and that it agrees

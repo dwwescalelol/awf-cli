@@ -1,0 +1,31 @@
+openawf: 0.1.0
+name: no-end
+summary: A retry cycle with no way out, so no ending state is reachable.
+model: claude-sonnet-5
+version: 0.1.0
+sha: null
+
+start: build
+orchestration:
+  build: test
+  test:
+    pass: build
+    fail: build
+
+tasks:
+  build:
+    version: 0.1.0
+    summary: Build the thing.
+    body: |
+      # Build
+
+      Build the thing.
+
+  test:
+    version: 0.1.0
+    summary: Test the build.
+    outcomes: [pass, fail]
+    body: |
+      # Test
+
+      Test the build and emit pass or fail.

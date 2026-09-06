@@ -1,5 +1,3 @@
-// Package awf is the OpenAWF domain: a workflow as a finite state machine of
-// tasks, resolved. It knows nothing about documents.
 package awf
 
 type Workflow struct {
@@ -12,15 +10,17 @@ type Workflow struct {
 	Servers []*MCPServer
 }
 
-// State runs a task, then leaves by the edge the task's outcome fires. A state
-// with no edges out ends the flow.
 type State struct {
 	Task *Task
 	Out  []Edge
 }
 
+func (s *State) IsTerminal() bool {
+	return len(s.Out) == 0
+}
+
 type Edge struct {
-	On      Outcome // the outcome that fires it, empty when the task emits none
+	On      Outcome
 	To      *State
 	Retries *int
 	Session Session
@@ -44,8 +44,6 @@ type MCPServer struct {
 	Tools     Tools
 }
 
-// Tools is the set of a server's tools the workflow may call: all of them, or
-// a named few.
 type Tools struct {
 	All   bool
 	Names []string

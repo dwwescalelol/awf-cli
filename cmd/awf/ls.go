@@ -2,24 +2,12 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"strings"
 	"text/tabwriter"
 
 	"github.com/dwwescalelol/awf-cli/internal/store"
 	"github.com/spf13/cobra"
 )
-
-type listing struct {
-	dir  string
-	rows []row
-}
-
-type row struct {
-	kind     store.Kind
-	id       string
-	versions []string
-}
 
 func lsCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -29,11 +17,12 @@ func lsCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			global, _ := cmd.Flags().GetBool("global")
 
-			l, err := list(global)
+			dir, workflows, tasks, err := list(global)
 			if err != nil {
+				fmt.Println(formatErr(err))
 				return err
 			}
-			printListing(cmd.OutOrStdout(), l)
+			fmt.Println(formatListing(dir, workflows, tasks))
 			return nil
 		},
 	}
@@ -41,34 +30,37 @@ func lsCmd() *cobra.Command {
 	return cmd
 }
 
-func list(global bool) (listing, error) {
+func list(global bool) (dir string, workflows, tasks []store.Entry, err error) {
 	scope, err := store.Resolve(global)
 	if err != nil {
-		return listing{}, err
+		return "", nil, nil, err
 	}
-
-	l := listing{dir: scope.Dir}
-	for _, kind := range []store.Kind{store.Workflow, store.Task} {
-		entries, err := scope.List(kind)
-		if err != nil {
-			return listing{}, err
-		}
-		for _, e := range entries {
-			l.rows = append(l.rows, row{kind: kind, id: e.ID, versions: e.Versions})
-		}
+	if workflows, err = scope.List(store.Workflow); err != nil {
+		return "", nil, nil, err
 	}
-	return l, nil
+	if tasks, err = scope.List(store.Task); err != nil {
+		return "", nil, nil, err
+	}
+	return scope.Dir, workflows, tasks, nil
 }
 
-func printListing(out io.Writer, l listing) {
-	fmt.Fprintln(out, l.dir)
-	if len(l.rows) == 0 {
-		fmt.Fprintln(out, "empty")
-		return
+func formatListing(dir string, workflows, tasks []store.Entry) string {
+	if len(workflows)+len(tasks) == 0 {
+		return dir + "\nempty"
 	}
-	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	for _, r := range l.rows {
-		fmt.Fprintf(w, "%s\t%s\t%s\n", r.kind, r.id, strings.Join(r.versions, ", "))
+
+	var b strings.Builder
+	b.WriteString(dir + "\n")
+	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
+	for _, kind := range []store.Kind{store.Workflow, store.Task} {
+		entries := workflows
+		if kind == store.Task {
+			entries = tasks
+		}
+		for _, e := range entries {
+			fmt.Fprintf(w, "%s\t%s\t%s\n", kind, e.ID, strings.Join(e.Versions, ", "))
+		}
 	}
 	w.Flush()
+	return strings.TrimRight(b.String(), "\n")
 }

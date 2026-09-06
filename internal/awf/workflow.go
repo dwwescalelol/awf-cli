@@ -1,10 +1,12 @@
 package awf
 
+import "github.com/dwwescalelol/awf-cli/internal/version"
+
 type Workflow struct {
 	Name    string
 	Summary string
 	Model   string
-	Version Version
+	Version version.Version
 	Start   *State
 	States  []*State
 	Servers []*MCPServer
@@ -28,7 +30,7 @@ type Edge struct {
 
 type Task struct {
 	Name     string
-	Version  Version
+	Version  version.Version
 	Summary  string
 	Model    string
 	Input    map[string]any
@@ -65,7 +67,3 @@ const (
 	HTTP  Transport = "http"
 	SSE   Transport = "sse"
 )
-
-type Version struct {
-	Major, Minor, Patch int
-}

@@ -33,7 +33,7 @@ func (w *Workflow) Validate() error {
 		v.node(name, w.Orchestration[name], w.Tasks)
 	}
 
-	if _, err := parseVersion(w.Version); err != nil {
+	if _, err := w.Version.Parsed(); err != nil {
 		v.failf("version", "%v", err)
 	}
 	return errors.Join(v...)
@@ -137,7 +137,7 @@ func (v *checks) task(name string, t *Task, servers map[string]MCPServer) {
 	if t.Body == "" {
 		v.failf(path+"/body", "task has no body")
 	}
-	if _, err := parseVersion(t.Version); err != nil {
+	if _, err := t.Version.Parsed(); err != nil {
 		v.failf(path+"/version", "%v", err)
 	}
 	for _, server := range t.Uses {

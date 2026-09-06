@@ -1,10 +1,6 @@
 package manifest
 
 import (
-	"fmt"
-	"strconv"
-	"strings"
-
 	"github.com/dwwescalelol/awf-cli/internal/awf"
 )
 
@@ -22,7 +18,9 @@ func (w *Workflow) Build() *awf.Workflow {
 		states[name].Out = transitions(node, states)
 	}
 
-	version, _ := parseVersion(w.Version)
+	// Validate reports a version that will not parse, so Build takes the zero
+	// value for one and carries on.
+	version, _ := w.Version.Parsed()
 	return &awf.Workflow{
 		Name:    w.Name,
 		Summary: w.Summary,
@@ -57,7 +55,7 @@ func edge(on awf.Outcome, e Edge, states map[string]*awf.State) awf.Edge {
 }
 
 func task(name string, t *Task, servers map[string]*awf.MCPServer) *awf.Task {
-	version, _ := parseVersion(t.Version)
+	version, _ := t.Version.Parsed()
 	uses := make([]*awf.MCPServer, 0, len(t.Uses))
 	for _, server := range t.Uses {
 		uses = append(uses, servers[server])
@@ -85,26 +83,6 @@ func server(name string, s MCPServer) *awf.MCPServer {
 		tools = awf.Tools{All: s.Tools.All, Names: s.Tools.Names}
 	}
 	return &awf.MCPServer{Name: name, Transport: awf.Transport(s.Transport), Tools: tools}
-}
-
-func parseVersion(v Version) (awf.Version, error) {
-	if v == "" {
-		return awf.Version{}, nil
-	}
-	parts := strings.Split(string(v), ".")
-	if len(parts) != 3 {
-		return awf.Version{}, fmt.Errorf("%q: not major.minor.patch", v)
-	}
-	var out awf.Version
-	into := []*int{&out.Major, &out.Minor, &out.Patch}
-	for i, part := range parts {
-		n, err := strconv.Atoi(part)
-		if err != nil || n < 0 {
-			return awf.Version{}, fmt.Errorf("%q: not major.minor.patch", v)
-		}
-		*into[i] = n
-	}
-	return out, nil
 }
 
 func values[V any](m map[string]V) []V {

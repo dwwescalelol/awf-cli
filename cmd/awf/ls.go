@@ -20,7 +20,13 @@ func lsCmd() *cobra.Command {
 			onlyTasks, _ := cmd.Flags().GetBool("task")
 
 			kinds := kinds(onlyWorkflows, onlyTasks)
-			dir, entries, err := list(global, kinds)
+			scope, err := store.Resolve(global)
+			if err != nil {
+				fmt.Println(formatErr(err))
+				return err
+			}
+
+			dir, entries, err := list(scope, kinds)
 			if err != nil {
 				fmt.Println(formatErr(err))
 				return err
@@ -49,12 +55,7 @@ func kinds(workflows, tasks bool) []store.Kind {
 	return kinds
 }
 
-func list(global bool, kinds []store.Kind) (string, map[store.Kind][]store.Entry, error) {
-	scope, err := store.Resolve(global)
-	if err != nil {
-		return "", nil, err
-	}
-
+func list(scope store.Scope, kinds []store.Kind) (string, map[store.Kind][]store.Entry, error) {
 	entries := make(map[store.Kind][]store.Entry, len(kinds))
 	for _, kind := range kinds {
 		found, err := scope.List(kind)
@@ -74,7 +75,7 @@ func formatListing(dir string, kinds []store.Kind, entries map[store.Kind][]stor
 			if len(kinds) > 1 {
 				fmt.Fprintf(w, "%s\t", kind)
 			}
-			fmt.Fprintf(w, "%s\t%s\n", e.ID, strings.Join(e.Versions, ", "))
+			fmt.Fprintf(w, "%s\t%s\n", e.ID, versions(e))
 		}
 	}
 	w.Flush()
@@ -83,4 +84,12 @@ func formatListing(dir string, kinds []store.Kind, entries map[store.Kind][]stor
 		return dir + "\nempty"
 	}
 	return dir + "\n" + strings.TrimRight(b.String(), "\n")
+}
+
+func versions(e store.Entry) string {
+	out := make([]string, 0, len(e.Versions))
+	for _, v := range e.Versions {
+		out = append(out, v.String())
+	}
+	return strings.Join(out, ", ")
 }

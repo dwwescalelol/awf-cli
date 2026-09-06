@@ -7,8 +7,9 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
+
+	"github.com/dwwescalelol/awf-cli/internal/version"
 )
 
 const dirName = ".awf"
@@ -75,8 +76,8 @@ func globalScope() (Scope, error) {
 	return Scope{Dir: filepath.Join(home, dirName)}, nil
 }
 
-func (s Scope) Path(kind Kind, id, version string) string {
-	return filepath.Join(s.Dir, string(kind), id, version+kind.ext())
+func (s Scope) Path(kind Kind, id string, v version.Version) string {
+	return filepath.Join(s.Dir, string(kind), id, v.String()+kind.ext())
 }
 
 // Mkdir makes the directory Path writes into. Scopes appear on first write.
@@ -87,11 +88,9 @@ func (s Scope) Mkdir(kind Kind, id string) error {
 // Entry is an id and the versions stored under it.
 type Entry struct {
 	ID       string
-	Versions []string
+	Versions []version.Version
 }
 
-// List reports what a scope holds. A scope that has never been written to
-// holds nothing, which is not an error.
 func (s Scope) List(kind Kind) ([]Entry, error) {
 	ids, err := os.ReadDir(filepath.Join(s.Dir, string(kind)))
 	if errors.Is(err, fs.ErrNotExist) {
@@ -118,18 +117,22 @@ func (s Scope) List(kind Kind) ([]Entry, error) {
 	return entries, nil
 }
 
-func (s Scope) versions(kind Kind, id string) ([]string, error) {
+func (s Scope) versions(kind Kind, id string) ([]version.Version, error) {
 	files, err := os.ReadDir(filepath.Join(s.Dir, string(kind), id))
 	if err != nil {
 		return nil, err
 	}
-	var versions []string
+	var versions []version.Version
 	for _, f := range files {
 		name := f.Name()
 		if f.IsDir() || !strings.HasSuffix(name, kind.ext()) {
 			continue
 		}
-		versions = append(versions, strings.TrimSuffix(name, kind.ext()))
+		v, err := version.Parse(strings.TrimSuffix(name, kind.ext()))
+		if err != nil {
+			continue
+		}
+		versions = append(versions, v)
 	}
 	return versions, nil
 }
@@ -141,42 +144,44 @@ func isDir(path string) bool {
 
 // Latest is the highest version stored under an id. Versions sort numerically,
 // so 0.10.0 beats 0.9.0.
-func (s Scope) Latest(kind Kind, id string) (string, error) {
+func (s Scope) Latest(kind Kind, id string) (version.Version, error) {
 	versions, err := s.versions(kind, id)
-	if errors.Is(err, fs.ErrNotExist) || len(versions) == 0 {
-		return "", fmt.Errorf("%s %q: not installed in %s", kind, id, s.Dir)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return version.Version{}, err
 	}
-	if err != nil {
-		return "", err
+	if len(versions) == 0 {
+		return version.Version{}, fmt.Errorf("%s %q: not installed in %s", kind, id, s.Dir)
 	}
+
 	latest := versions[0]
 	for _, v := range versions[1:] {
-		if compareVersions(v, latest) > 0 {
+		if version.Newer(v, latest) {
 			latest = v
 		}
 	}
 	return latest, nil
 }
 
-// compareVersions orders dotted numbers. A component that is not a number
-// sorts below one that is, so a stray filename never wins.
-func compareVersions(a, b string) int {
-	as, bs := strings.Split(a, "."), strings.Split(b, ".")
-	for i := 0; i < max(len(as), len(bs)); i++ {
-		if c := component(as, i) - component(bs, i); c != 0 {
-			return c
+// Locate turns a reference into a file. id@version names a stored document,
+// and a bare id its highest version. A reference that is a file on disk is
+// that file, so a path always beats an id.
+func (s Scope) Locate(kind Kind, ref string) (string, error) {
+	id, pin, pinned := strings.Cut(ref, "@")
+	if !pinned {
+		if _, err := os.Stat(ref); err == nil {
+			return ref, nil
 		}
 	}
-	return strings.Compare(a, b)
-}
+	if pinned && (id == "" || pin == "") {
+		return "", fmt.Errorf("%q: not a path or id@version", ref)
+	}
 
-func component(parts []string, i int) int {
-	if i >= len(parts) {
-		return 0
+	v, err := s.Latest(kind, id)
+	if pinned {
+		v, err = version.Parse(pin)
 	}
-	n, err := strconv.Atoi(parts[i])
 	if err != nil {
-		return -1
+		return "", err
 	}
-	return n
+	return s.Path(kind, id, v), nil
 }

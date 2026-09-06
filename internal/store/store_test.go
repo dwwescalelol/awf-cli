@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/dwwescalelol/awf-cli/internal/version"
 )
 
 // setup builds a temp tree, points the home directory at it, and chdirs into
@@ -123,7 +125,7 @@ func TestPath(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.kind), func(t *testing.T) {
-			if got := s.Path(tt.kind, "feat-dev", "0.1.0"); got != tt.want {
+			if got := s.Path(tt.kind, "feat-dev", version.Version{Minor: 1}); got != tt.want {
 				t.Errorf("got %q, want %q", got, tt.want)
 			}
 		})
@@ -137,12 +139,16 @@ func TestCreateAndList(t *testing.T) {
 		t.Fatalf("empty scope: got %v, %v", entries, err)
 	}
 
-	write := func(kind Kind, id, version string) {
+	write := func(kind Kind, id, v string) {
 		t.Helper()
 		if err := s.Mkdir(kind, id); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(s.Path(kind, id, version), nil, 0o644); err != nil {
+		parsed, err := version.Parse(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(s.Path(kind, id, parsed), nil, 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -161,8 +167,8 @@ func TestCreateAndList(t *testing.T) {
 	}
 
 	want := []Entry{
-		{ID: "feat-dev", Versions: []string{"0.1.0", "0.10.0", "0.2.0"}},
-		{ID: "ship", Versions: []string{"1.0.0"}},
+		{ID: "feat-dev", Versions: parseAll(t, "0.1.0", "0.10.0", "0.2.0")},
+		{ID: "ship", Versions: parseAll(t, "1.0.0")},
 	}
 	got, err := s.List(Workflow)
 	if err != nil {
@@ -172,7 +178,7 @@ func TestCreateAndList(t *testing.T) {
 		t.Errorf("workflows: got %v, want %v", got, want)
 	}
 
-	wantTasks := []Entry{{ID: "create-diff", Versions: []string{"0.1.0"}}}
+	wantTasks := []Entry{{ID: "create-diff", Versions: parseAll(t, "0.1.0")}}
 	got, err = s.List(Task)
 	if err != nil {
 		t.Fatalf("List: %v", err)
@@ -180,4 +186,17 @@ func TestCreateAndList(t *testing.T) {
 	if !reflect.DeepEqual(got, wantTasks) {
 		t.Errorf("tasks: got %v, want %v", got, wantTasks)
 	}
+}
+
+func parseAll(t *testing.T, in ...string) []version.Version {
+	t.Helper()
+	out := make([]version.Version, 0, len(in))
+	for _, s := range in {
+		v, err := version.Parse(s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out = append(out, v)
+	}
+	return out
 }

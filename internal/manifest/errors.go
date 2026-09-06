@@ -2,8 +2,7 @@ package manifest
 
 // ParseError reports where in the document parsing failed. Path is a slash
 // separated pointer to the offending node, empty when the failure is on a
-// header field: go-yaml decodes those with its struct decoder, which offers no
-// hook to record the key.
+// header field.
 type ParseError struct {
 	Path string
 	Err  error

@@ -144,7 +144,7 @@ func isDir(path string) bool {
 func (s Scope) Latest(kind Kind, id string) (string, error) {
 	versions, err := s.versions(kind, id)
 	if errors.Is(err, fs.ErrNotExist) || len(versions) == 0 {
-		return "", fmt.Errorf("no %s %q is installed in %s", kind, id, s.Dir)
+		return "", fmt.Errorf("%s %q: not installed in %s", kind, id, s.Dir)
 	}
 	if err != nil {
 		return "", err

@@ -161,7 +161,7 @@ func TestParseErrors(t *testing.T) {
 		{
 			name: "null edge in branch",
 			yaml: header + "orchestration:\n  testing:\n    pass: a\n    fail: null\ntasks:\n  a:\n    body: hi\n",
-			want: "parse /orchestration/testing/fail: edge: null is not a task",
+			want: "parse /orchestration/testing/fail: edge null: not a task name or an edge",
 		},
 		{
 			name: "unknown edge field",
@@ -176,7 +176,7 @@ func TestParseErrors(t *testing.T) {
 		{
 			name: "bad tools",
 			yaml: header + "orchestration:\n  a: null\ntasks:\n  a:\n    body: hi\nmcp:\n  git:\n    tools: some\n",
-			want: `parse: tools: "some" is not a tool list or "*"`,
+			want: `parse: tools "some": not a tool list or "*"`,
 		},
 		{
 			name: "header field",

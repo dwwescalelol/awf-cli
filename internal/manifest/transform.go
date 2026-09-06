@@ -8,8 +8,6 @@ import (
 	"github.com/dwwescalelol/awf-cli/internal/awf"
 )
 
-// Build is the document as the machine it describes: names become pointers.
-// It assumes the document validates, so call Validate first.
 func (w *Workflow) Build() *awf.Workflow {
 	servers := make(map[string]*awf.MCPServer, len(w.MCP))
 	for name, s := range w.MCP {
@@ -36,7 +34,6 @@ func (w *Workflow) Build() *awf.Workflow {
 	}
 }
 
-// transitions are the edges out of a state. A terminal node has none.
 func transitions(node Transition, states map[string]*awf.State) []awf.Edge {
 	switch {
 	case node.Terminal():
@@ -96,14 +93,14 @@ func parseVersion(v Version) (awf.Version, error) {
 	}
 	parts := strings.Split(string(v), ".")
 	if len(parts) != 3 {
-		return awf.Version{}, fmt.Errorf("%q is not a major.minor.patch version", v)
+		return awf.Version{}, fmt.Errorf("%q: not major.minor.patch", v)
 	}
 	var out awf.Version
 	into := []*int{&out.Major, &out.Minor, &out.Patch}
 	for i, part := range parts {
 		n, err := strconv.Atoi(part)
 		if err != nil || n < 0 {
-			return awf.Version{}, fmt.Errorf("%q is not a major.minor.patch version", v)
+			return awf.Version{}, fmt.Errorf("%q: not major.minor.patch", v)
 		}
 		*into[i] = n
 	}

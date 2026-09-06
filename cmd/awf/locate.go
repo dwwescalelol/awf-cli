@@ -19,7 +19,7 @@ func locate(arg string, global bool) (string, error) {
 		}
 	}
 	if pinned && (id == "" || version == "") {
-		return "", fmt.Errorf("%q is not id@version", arg)
+		return "", fmt.Errorf("%q: not a path or id@version", arg)
 	}
 
 	scope, err := store.Resolve(global)

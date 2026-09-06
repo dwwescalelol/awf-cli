@@ -192,7 +192,7 @@ func (e *Edge) UnmarshalYAML(data []byte) error {
 	}
 	switch node := v.(type) {
 	case nil:
-		return errors.New("edge: null is not a task")
+		return errors.New("edge null: not a task name or an edge")
 	case string:
 		*e = Edge{Task: node}
 		return nil
@@ -205,7 +205,7 @@ func (e *Edge) UnmarshalYAML(data []byte) error {
 		*e = Edge(out)
 		return nil
 	}
-	return fmt.Errorf("edge: %T is not a task name or an edge", v)
+	return fmt.Errorf("edge %T: not a task name or an edge", v)
 }
 
 func (e Edge) MarshalYAML() (any, error) {
@@ -305,7 +305,7 @@ func (t *MCPTools) UnmarshalYAML(data []byte) error {
 	}
 	if s, ok := v.(string); ok {
 		if s != "*" {
-			return fmt.Errorf("tools: %q is not a tool list or \"*\"", s)
+			return fmt.Errorf("tools %q: not a tool list or \"*\"", s)
 		}
 		*t = MCPTools{All: true}
 		return nil

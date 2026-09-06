@@ -67,7 +67,7 @@ func TestValidate(t *testing.T) {
 		{
 			name: "version is not major.minor.patch",
 			yaml: header + "version: 1.0\norchestration:\n  a: null\ntasks:\n  a:\n    body: hi\n",
-			want: `invalid /version: "1.0" is not a major.minor.patch version`,
+			want: `invalid /version: "1.0": not major.minor.patch`,
 		},
 	}
 

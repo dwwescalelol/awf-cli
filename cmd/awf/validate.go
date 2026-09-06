@@ -1,61 +1,53 @@
 package main
 
 import (
-	"errors"
 	"fmt"
-	"io"
 	"os"
 
 	"github.com/dwwescalelol/awf-cli/internal/manifest"
 	"github.com/spf13/cobra"
 )
 
-var errInvalid = errors.New("document is not valid")
-
-func newValidate() *cobra.Command {
-	var global bool
-
+func validateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "validate <path>|<id>@<version>",
 		Short: "Check a workflow document against the OpenAWF spec",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			path, err := locate(args[0], global)
+			global, _ := cmd.Flags().GetBool("global")
+
+			path, err := validateFile(args[0], global)
 			if err != nil {
+				fmt.Println(formatErr(err))
 				return err
 			}
-			return validateFile(cmd.OutOrStdout(), path)
+			fmt.Println(formatValid(path))
+			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&global, "global", false, "act on ~/.awf")
+	cmd.Flags().Bool("global", false, "act on ~/.awf")
 	return cmd
 }
 
-func validateFile(out io.Writer, path string) error {
+func formatValid(path string) string { return path + "\nvalid" }
+
+func formatErr(err error) string { return err.Error() }
+
+func validateFile(arg string, global bool) (string, error) {
+	path, err := locate(arg, global)
+	if err != nil {
+		return "", err
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return err
+		return "", err
 	}
-	fmt.Fprintln(out, path)
-
 	wf, err := manifest.Parse(data)
 	if err != nil {
-		fmt.Fprintln(out, err)
-		return errInvalid
+		return path, err
 	}
 	if err := wf.Validate(); err != nil {
-		fmt.Fprintln(out, err)
-		return errInvalid
+		return path, err
 	}
-
-	stuck := wf.Build().StuckStates()
-	for _, s := range stuck {
-		fmt.Fprintf(out, "/orchestration/%s: the flow can never leave this task\n", s.Task.Name)
-	}
-	if len(stuck) > 0 {
-		return errInvalid
-	}
-
-	fmt.Fprintln(out, "valid")
-	return nil
+	return path, wf.Graph()
 }

@@ -1,0 +1,58 @@
+openawf: 0.1.0
+name: trap
+summary: One arm reaches a terminal, the other traps the run in a retry cycle.
+model: claude-sonnet-5
+version: 0.1.0
+sha: null
+
+start: build
+orchestration:
+  build: test
+  test:
+    pass: done
+    fail: repair
+  repair: recheck
+  recheck: repair
+  done: null
+
+tasks:
+  build:
+    version: 0.1.0
+    summary: Build the thing.
+    body: |
+      # Build
+
+      Build the thing.
+
+  test:
+    version: 0.1.0
+    summary: Test the build.
+    outcomes: [pass, fail]
+    body: |
+      # Test
+
+      Test the build and emit pass or fail.
+
+  repair:
+    version: 0.1.0
+    summary: Repair the build.
+    body: |
+      # Repair
+
+      Repair the build.
+
+  recheck:
+    version: 0.1.0
+    summary: Recheck the repair.
+    body: |
+      # Recheck
+
+      Recheck the repair.
+
+  done:
+    version: 0.1.0
+    summary: Report the result.
+    body: |
+      # Done
+
+      Report the result.

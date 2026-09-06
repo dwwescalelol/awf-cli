@@ -1,6 +1,11 @@
 package awf
 
-import "testing"
+import (
+	"errors"
+	"fmt"
+	"strings"
+	"testing"
+)
 
 // machine wires states named by letter, each entry listing the states it goes
 // to. A state with no targets ends the flow.
@@ -29,7 +34,7 @@ func names(states []*State) map[string]bool {
 	return out
 }
 
-func TestStuckStates(t *testing.T) {
+func TestTrapStates(t *testing.T) {
 	tests := []struct {
 		name  string
 		start string
@@ -72,7 +77,7 @@ func TestStuckStates(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := names(machine(tt.start, tt.edges).StuckStates())
+			got := names(machine(tt.start, tt.edges).TrapStates())
 			if len(got) != len(tt.want) {
 				t.Fatalf("got %v, want %v", got, tt.want)
 			}
@@ -82,5 +87,42 @@ func TestStuckStates(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestCheckNoTerminal(t *testing.T) {
+	w := machine("a", map[string][]string{"a": {"b"}, "b": {"a"}})
+
+	if err := w.Check(); !errors.Is(err, ErrNoTerminal) {
+		t.Fatalf("got %v, want %v", err, ErrNoTerminal)
+	}
+}
+
+func TestCheckTrap(t *testing.T) {
+	w := machine("a", map[string][]string{"a": {"b", "c"}, "b": nil, "c": {"d"}, "d": {"c"}})
+
+	err := w.Check()
+	var trap *TrapError
+	if !errors.As(err, &trap) {
+		t.Fatalf("got %v, want a *TrapError", err)
+	}
+	for _, name := range []string{"c", "d"} {
+		want := fmt.Sprintf("the flow can never leave task %q", name)
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("%q not reported, got: %v", want, err)
+		}
+	}
+	for _, name := range []string{"a", "b"} {
+		if strings.Contains(err.Error(), fmt.Sprintf("%q", name)) {
+			t.Errorf("%q reported, got: %v", name, err)
+		}
+	}
+}
+
+func TestCheckReachesATerminal(t *testing.T) {
+	w := machine("a", map[string][]string{"a": {"b"}, "b": nil})
+
+	if err := w.Check(); err != nil {
+		t.Fatalf("got %v, want nil", err)
 	}
 }

@@ -1,15 +1,12 @@
 package awf
 
-// StuckStates are the states the flow can enter but never leave: no ending
-// state is reachable from them, so a run that arrives loops forever. A retry
-// cycle with no way out is the usual cause.
-//
-// States the flow never enters are not reported. They cannot trap a run.
-func (w *Workflow) StuckStates() []*State {
+import "errors"
+
+func (w *Workflow) TrapStates() []*State {
 	if w.Start == nil {
 		return nil
 	}
-	live := reach(ends(w.States), reverse(w.States))
+	live := reach(terminals(w.States), reverse(w.States))
 	entered := reach([]*State{w.Start}, next)
 
 	var out []*State
@@ -21,11 +18,28 @@ func (w *Workflow) StuckStates() []*State {
 	return out
 }
 
-// ends are the states the flow stops at.
-func ends(states []*State) []*State {
+// Check reports why the machine can never finish: it has no terminal state, or
+// it has states that trap a run. One call answers the whole machine.
+func (w *Workflow) Check() error {
+	if w.Start == nil {
+		return nil
+	}
+	if len(terminals(w.States)) == 0 {
+		return ErrNoTerminal
+	}
+
+	trapped := w.TrapStates()
+	errs := make([]error, 0, len(trapped))
+	for _, s := range trapped {
+		errs = append(errs, &TrapError{State: s})
+	}
+	return errors.Join(errs...)
+}
+
+func terminals(states []*State) []*State {
 	var out []*State
 	for _, s := range states {
-		if len(s.Out) == 0 {
+		if s.IsTerminal() {
 			out = append(out, s)
 		}
 	}
@@ -40,8 +54,6 @@ func next(s *State) []*State {
 	return out
 }
 
-// reverse turns the machine round, so a walk from the ends finds every state
-// that can get to one.
 func reverse(states []*State) func(*State) []*State {
 	back := make(map[*State][]*State, len(states))
 	for _, s := range states {

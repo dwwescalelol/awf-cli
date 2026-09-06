@@ -21,14 +21,14 @@ type row struct {
 	versions []string
 }
 
-func newLs() *cobra.Command {
-	var global bool
-
+func lsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ls",
 		Short: "List the workflows and tasks in scope",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			global, _ := cmd.Flags().GetBool("global")
+
 			l, err := list(global)
 			if err != nil {
 				return err
@@ -37,7 +37,7 @@ func newLs() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&global, "global", false, "act on ~/.awf")
+	cmd.Flags().Bool("global", false, "act on ~/.awf")
 	return cmd
 }
 

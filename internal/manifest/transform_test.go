@@ -15,7 +15,7 @@ func TestBuild(t *testing.T) {
 	if got := len(model.States); got != 7 {
 		t.Errorf("%d states", got)
 	}
-	if stuck := model.StuckStates(); len(stuck) != 0 {
+	if stuck := model.TrapStates(); len(stuck) != 0 {
 		t.Errorf("stuck: %v", stuck)
 	}
 

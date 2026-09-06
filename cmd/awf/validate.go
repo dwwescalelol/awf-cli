@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/dwwescalelol/awf-cli/internal/manifest"
+	"github.com/dwwescalelol/awf-cli/internal/store"
 	"github.com/spf13/cobra"
 )
 
@@ -33,8 +34,13 @@ func formatValid(path string) string { return path + "\nvalid" }
 
 func formatErr(err error) string { return err.Error() }
 
-func validateFile(arg string, global bool) (string, error) {
-	path, err := locate(arg, global)
+func validateFile(ref string, global bool) (string, error) {
+	scope, err := store.Resolve(global)
+	if err != nil {
+		return "", err
+	}
+
+	path, err := scope.Locate(store.Workflow, ref)
 	if err != nil {
 		return "", err
 	}

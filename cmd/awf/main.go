@@ -3,10 +3,9 @@ package main
 import (
 	"os"
 
+	"github.com/dwwescalelol/awf-cli/internal/version"
 	"github.com/spf13/cobra"
 )
-
-var version = "0.1.0"
 
 func main() {
 	root := &cobra.Command{
@@ -14,7 +13,7 @@ func main() {
 		Short:         "Operate on OpenAWF workflow documents",
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		Version:       version,
+		Version:       version.CLI,
 	}
 	root.SetVersionTemplate("awf {{.Version}}\n")
 	root.AddCommand(lsCmd(), validateCmd())

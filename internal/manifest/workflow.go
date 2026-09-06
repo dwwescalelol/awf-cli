@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/dwwescalelol/awf-cli/internal/version"
 	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/ast"
 )
@@ -15,7 +16,7 @@ type Workflow struct {
 	Summary       string               `yaml:"summary,omitempty"`
 	Model         string               `yaml:"model,omitempty"`
 	Version       Version              `yaml:"version,omitempty"`
-	SHA           *string              `yaml:"sha,omitempty"`
+	SHA           *string              `yaml:"sha"`
 	Source        string               `yaml:"source,omitempty"`
 	Start         string               `yaml:"start"`
 	Orchestration Orchestration        `yaml:"orchestration"`
@@ -30,12 +31,24 @@ type Workflow struct {
 type Version string
 
 func (v *Version) UnmarshalYAML(node ast.Node) error {
-	if s, ok := node.(*ast.StringNode); ok {
-		*v = Version(s.Value)
-		return nil
+	switch n := node.(type) {
+	case *ast.StringNode:
+		*v = Version(n.Value)
+	case *ast.IntegerNode, *ast.FloatNode:
+		*v = Version(n.String())
+	default:
+		return fmt.Errorf("version %s: not a version", node.Type())
 	}
-	*v = Version(node.String())
 	return nil
+}
+
+// Parsed is the version as a triple. An absent version is the zero version, so
+// a document that omits an optional one still builds.
+func (v Version) Parsed() (version.Version, error) {
+	if v == "" {
+		return version.Version{}, nil
+	}
+	return version.Parse(string(v))
 }
 
 func Parse(data []byte) (*Workflow, error) {

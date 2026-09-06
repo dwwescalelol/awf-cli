@@ -16,7 +16,7 @@ func main() {
 		Version:       version.CLI,
 	}
 	root.SetVersionTemplate("awf {{.Version}}\n")
-	root.AddCommand(lsCmd(), validateCmd())
+	root.AddCommand(lsCmd(), newCmd(), validateCmd())
 
 	if err := root.Execute(); err != nil {
 		os.Exit(1)

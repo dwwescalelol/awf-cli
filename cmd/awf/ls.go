@@ -16,51 +16,71 @@ func lsCmd() *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			global, _ := cmd.Flags().GetBool("global")
+			onlyWorkflows, _ := cmd.Flags().GetBool("wf")
+			onlyTasks, _ := cmd.Flags().GetBool("task")
 
-			dir, workflows, tasks, err := list(global)
+			kinds := kinds(onlyWorkflows, onlyTasks)
+			dir, entries, err := list(global, kinds)
 			if err != nil {
 				fmt.Println(formatErr(err))
 				return err
 			}
-			fmt.Println(formatListing(dir, workflows, tasks))
+			fmt.Println(formatListing(dir, kinds, entries))
 			return nil
 		},
 	}
 	cmd.Flags().Bool("global", false, "act on ~/.awf")
+	cmd.Flags().BoolP("wf", "w", false, "list workflows only")
+	cmd.Flags().BoolP("task", "t", false, "list tasks only")
 	return cmd
 }
 
-func list(global bool) (dir string, workflows, tasks []store.Entry, err error) {
-	scope, err := store.Resolve(global)
-	if err != nil {
-		return "", nil, nil, err
+func kinds(workflows, tasks bool) []store.Kind {
+	if !workflows && !tasks {
+		return []store.Kind{store.Workflow, store.Task}
 	}
-	if workflows, err = scope.List(store.Workflow); err != nil {
-		return "", nil, nil, err
+	kinds := make([]store.Kind, 0, 2)
+	if workflows {
+		kinds = append(kinds, store.Workflow)
 	}
-	if tasks, err = scope.List(store.Task); err != nil {
-		return "", nil, nil, err
+	if tasks {
+		kinds = append(kinds, store.Task)
 	}
-	return scope.Dir, workflows, tasks, nil
+	return kinds
 }
 
-func formatListing(dir string, workflows, tasks []store.Entry) string {
-	if len(workflows)+len(tasks) == 0 {
-		return dir + "\nempty"
+func list(global bool, kinds []store.Kind) (string, map[store.Kind][]store.Entry, error) {
+	scope, err := store.Resolve(global)
+	if err != nil {
+		return "", nil, err
 	}
 
-	var b strings.Builder
-	b.WriteString(dir + "\n")
-	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
-	for _, kind := range []store.Kind{store.Workflow, store.Task} {
-		entries := workflows
-		if kind == store.Task {
-			entries = tasks
+	entries := make(map[store.Kind][]store.Entry, len(kinds))
+	for _, kind := range kinds {
+		found, err := scope.List(kind)
+		if err != nil {
+			return "", nil, err
 		}
-		for _, e := range entries {
-			fmt.Fprintf(w, "%s\t%s\t%s\n", kind, e.ID, strings.Join(e.Versions, ", "))
+		entries[kind] = found
+	}
+	return scope.Dir, entries, nil
+}
+
+func formatListing(dir string, kinds []store.Kind, entries map[store.Kind][]store.Entry) string {
+	var b strings.Builder
+	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
+	for _, kind := range kinds {
+		for _, e := range entries[kind] {
+			if len(kinds) > 1 {
+				fmt.Fprintf(w, "%s\t", kind)
+			}
+			fmt.Fprintf(w, "%s\t%s\n", e.ID, strings.Join(e.Versions, ", "))
 		}
 	}
 	w.Flush()
-	return strings.TrimRight(b.String(), "\n")
+
+	if b.Len() == 0 {
+		return dir + "\nempty"
+	}
+	return dir + "\n" + strings.TrimRight(b.String(), "\n")
 }

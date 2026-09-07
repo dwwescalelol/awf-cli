@@ -167,7 +167,7 @@ func TestCreateAndList(t *testing.T) {
 	}
 
 	want := []Document{
-		{ID: "feat-dev", Versions: parseAll(t, "0.1.0", "0.10.0", "0.2.0")},
+		{ID: "feat-dev", Versions: parseAll(t, "0.1.0", "0.2.0", "0.10.0")},
 		{ID: "ship", Versions: parseAll(t, "1.0.0")},
 	}
 	got, skipped, err := s.List(Workflow)

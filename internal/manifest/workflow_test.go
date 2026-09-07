@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/dwwescalelol/awf-cli/internal/version"
 )
 
 func ptr[T any](v T) *T { return &v }
@@ -22,7 +24,7 @@ func TestParse(t *testing.T) {
 			name: "terminal transition",
 			yaml: header + "orchestration:\n  a: null\ntasks:\n  a:\n    body: hi\n",
 			want: Workflow{
-				OpenAWF:       "0.1.0",
+				OpenAWF:       version.Version{Minor: 1},
 				Name:          "wf",
 				Start:         "a",
 				Orchestration: Orchestration{"a": {}},
@@ -33,7 +35,7 @@ func TestParse(t *testing.T) {
 			name: "string edge",
 			yaml: header + "orchestration:\n  a: b\ntasks:\n  a:\n    body: hi\n",
 			want: Workflow{
-				OpenAWF:       "0.1.0",
+				OpenAWF:       version.Version{Minor: 1},
 				Name:          "wf",
 				Start:         "a",
 				Orchestration: Orchestration{"a": {Edge: &Edge{Task: "b"}}},
@@ -44,7 +46,7 @@ func TestParse(t *testing.T) {
 			name: "edge object",
 			yaml: header + "orchestration:\n  a:\n    task: b\n    retries: 2\n    session: resume\ntasks:\n  a:\n    body: hi\n",
 			want: Workflow{
-				OpenAWF:       "0.1.0",
+				OpenAWF:       version.Version{Minor: 1},
 				Name:          "wf",
 				Start:         "a",
 				Orchestration: Orchestration{"a": {Edge: &Edge{Task: "b", Retries: ptr(2), Session: "resume"}}},
@@ -55,7 +57,7 @@ func TestParse(t *testing.T) {
 			name: "branch",
 			yaml: header + "orchestration:\n  a:\n    pass: b\n    fail:\n      task: a\n      retries: 0\ntasks:\n  a:\n    body: hi\n",
 			want: Workflow{
-				OpenAWF: "0.1.0",
+				OpenAWF: version.Version{Minor: 1},
 				Name:    "wf",
 				Start:   "a",
 				Orchestration: Orchestration{"a": {Branch: Branch{
@@ -69,7 +71,7 @@ func TestParse(t *testing.T) {
 			name: "task ref",
 			yaml: header + "orchestration:\n  a: null\ntasks:\n  a:\n    $ref: ./a.md\n",
 			want: Workflow{
-				OpenAWF:       "0.1.0",
+				OpenAWF:       version.Version{Minor: 1},
 				Name:          "wf",
 				Start:         "a",
 				Orchestration: Orchestration{"a": {}},
@@ -80,7 +82,7 @@ func TestParse(t *testing.T) {
 			name: "mcp tools wildcard",
 			yaml: header + "orchestration:\n  a: null\ntasks:\n  a:\n    body: hi\nmcp:\n  git:\n    transport: stdio\n    tools: \"*\"\n",
 			want: Workflow{
-				OpenAWF:       "0.1.0",
+				OpenAWF:       version.Version{Minor: 1},
 				Name:          "wf",
 				Start:         "a",
 				Orchestration: Orchestration{"a": {}},
@@ -92,7 +94,7 @@ func TestParse(t *testing.T) {
 			name: "mcp tools list",
 			yaml: header + "orchestration:\n  a: null\ntasks:\n  a:\n    body: hi\nmcp:\n  git:\n    tools: [commit, diff]\n",
 			want: Workflow{
-				OpenAWF:       "0.1.0",
+				OpenAWF:       version.Version{Minor: 1},
 				Name:          "wf",
 				Start:         "a",
 				Orchestration: Orchestration{"a": {}},
@@ -118,23 +120,30 @@ func TestParse(t *testing.T) {
 func TestParseVersion(t *testing.T) {
 	tests := []struct {
 		yaml string
-		want Version
+		want version.Version
+		fail bool
 	}{
-		{"1.0", "1.0"},
-		{"1", "1"},
-		{`"1.0"`, "1.0"},
-		{"0.1.0", "0.1.0"},
+		{yaml: "0.1.0", want: version.Version{Minor: 1}},
+		{yaml: `"0.1.0"`, want: version.Version{Minor: 1}},
+		{yaml: "1.0", fail: true},
+		{yaml: "1", fail: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.yaml, func(t *testing.T) {
 			src := header + "version: " + tt.yaml + "\norchestration:\n  a: null\ntasks:\n  a:\n    body: hi\n"
 			wf, err := Parse([]byte(src))
+			if tt.fail {
+				if err == nil {
+					t.Fatalf("got %v, want an error", wf.Version)
+				}
+				return
+			}
 			if err != nil {
 				t.Fatalf("Parse: %v", err)
 			}
 			if wf.Version != tt.want {
-				t.Fatalf("got %q, want %q", wf.Version, tt.want)
+				t.Fatalf("got %v, want %v", wf.Version, tt.want)
 			}
 
 			out, err := Marshal(wf)
@@ -146,7 +155,7 @@ func TestParseVersion(t *testing.T) {
 				t.Fatalf("reparse: %v", err)
 			}
 			if again.Version != tt.want {
-				t.Fatalf("reparsed %q, want %q", again.Version, tt.want)
+				t.Fatalf("reparsed %v, want %v", again.Version, tt.want)
 			}
 		})
 	}
@@ -158,6 +167,11 @@ func TestParseErrors(t *testing.T) {
 		yaml string
 		want string
 	}{
+		{
+			name: "version is not major.minor.patch",
+			yaml: header + `version: "1.0"` + "\norchestration:\n  a: null\ntasks:\n  a:\n    body: hi\n",
+			want: `parse: "1.0": not major.minor.patch`,
+		},
 		{
 			name: "null edge in branch",
 			yaml: header + "orchestration:\n  testing:\n    pass: a\n    fail: null\ntasks:\n  a:\n    body: hi\n",
@@ -233,7 +247,7 @@ func TestRoundTrip(t *testing.T) {
 	if !wf.Orchestration["remove-worktree"].Terminal() {
 		t.Error("remove-worktree should be terminal")
 	}
-	if wf.Tasks["testing"].Task.Version != "2.1.0" {
-		t.Errorf("task version %q", wf.Tasks["testing"].Task.Version)
+	if want := (version.Version{Major: 2, Minor: 1}); wf.Tasks["testing"].Task.Version != want {
+		t.Errorf("task version %v", wf.Tasks["testing"].Task.Version)
 	}
 }

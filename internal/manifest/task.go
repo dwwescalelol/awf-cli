@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/dwwescalelol/awf-cli/internal/version"
 	"github.com/goccy/go-yaml"
 )
 
@@ -57,15 +58,15 @@ func MarshalTask(t *Task) ([]byte, error) {
 // taskFrontmatter is a Task without its body, and with the sha always written,
 // since a null sha is what marks a draft.
 type taskFrontmatter struct {
-	Version  Version        `yaml:"version,omitempty"`
-	SHA      *string        `yaml:"sha"`
-	Source   string         `yaml:"source,omitempty"`
-	Summary  string         `yaml:"summary,omitempty"`
-	Input    map[string]any `yaml:"input,omitempty"`
-	Output   map[string]any `yaml:"output,omitempty"`
-	Model    string         `yaml:"model,omitempty"`
-	Outcomes []string       `yaml:"outcomes,omitempty"`
-	Uses     []string       `yaml:"uses,omitempty"`
-	Body     string         `yaml:"-"`
-	XMeta    map[string]any `yaml:"x-meta,omitempty"`
+	Version  version.Version `yaml:"version,omitempty"`
+	SHA      *string         `yaml:"sha"`
+	Source   string          `yaml:"source,omitempty"`
+	Summary  string          `yaml:"summary,omitempty"`
+	Input    map[string]any  `yaml:"input,omitempty"`
+	Output   map[string]any  `yaml:"output,omitempty"`
+	Model    string          `yaml:"model,omitempty"`
+	Outcomes []string        `yaml:"outcomes,omitempty"`
+	Uses     []string        `yaml:"uses,omitempty"`
+	Body     string          `yaml:"-"`
+	XMeta    map[string]any  `yaml:"x-meta,omitempty"`
 }

@@ -18,9 +18,7 @@ func (w *Workflow) Build() *awf.Workflow {
 		states[name].Out = transitions(node, states)
 	}
 
-	// Validate reports a version that will not parse, so Build takes the zero
-	// value for one and carries on.
-	version, _ := w.Version.Parsed()
+	version := w.Version
 	return &awf.Workflow{
 		Name:    w.Name,
 		Summary: w.Summary,
@@ -55,7 +53,7 @@ func edge(on awf.Outcome, e Edge, states map[string]*awf.State) awf.Edge {
 }
 
 func task(name string, t *Task, servers map[string]*awf.MCPServer) *awf.Task {
-	version, _ := t.Version.Parsed()
+	version := t.Version
 	uses := make([]*awf.MCPServer, 0, len(t.Uses))
 	for _, server := range t.Uses {
 		uses = append(uses, servers[server])

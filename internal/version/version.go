@@ -2,6 +2,7 @@ package version
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -29,10 +30,12 @@ func (v Version) String() string {
 	return fmt.Sprintf("%d.%d.%d", v.Major, v.Minor, v.Patch)
 }
 
+var ErrNotAVersion = errors.New("not major.minor.patch")
+
 func Parse(s string) (Version, error) {
 	parts := strings.Split(s, ".")
 	if len(parts) != 3 {
-		return Version{}, fmt.Errorf("%q: not major.minor.patch", s)
+		return Version{}, fmt.Errorf("%q: %w", s, ErrNotAVersion)
 	}
 
 	var v Version
@@ -40,7 +43,7 @@ func Parse(s string) (Version, error) {
 	for i, part := range parts {
 		n, err := strconv.Atoi(part)
 		if err != nil || n < 0 {
-			return Version{}, fmt.Errorf("%q: not major.minor.patch", s)
+			return Version{}, fmt.Errorf("%q: %w", s, ErrNotAVersion)
 		}
 		*into[i] = n
 	}

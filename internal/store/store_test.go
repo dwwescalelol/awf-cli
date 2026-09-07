@@ -117,14 +117,14 @@ func TestResolveCreatesNothing(t *testing.T) {
 func TestPath(t *testing.T) {
 	s := Scope{Dir: filepath.Join("proj", ".awf")}
 	tests := []struct {
-		kind Kind
+		kind DocumentKind
 		want string
 	}{
 		{Workflow, filepath.Join("proj", ".awf", "wf", "feat-dev", "0.1.0.yaml")},
 		{Task, filepath.Join("proj", ".awf", "task", "feat-dev", "0.1.0.md")},
 	}
 	for _, tt := range tests {
-		t.Run(string(tt.kind), func(t *testing.T) {
+		t.Run(tt.kind.String(), func(t *testing.T) {
 			if got := s.Path(tt.kind, "feat-dev", version.Version{Minor: 1}); got != tt.want {
 				t.Errorf("got %q, want %q", got, tt.want)
 			}
@@ -135,11 +135,11 @@ func TestPath(t *testing.T) {
 func TestCreateAndList(t *testing.T) {
 	s := Scope{Dir: filepath.Join(t.TempDir(), ".awf")}
 
-	if entries, err := s.List(Workflow); err != nil || entries != nil {
-		t.Fatalf("empty scope: got %v, %v", entries, err)
+	if documents, _, err := s.List(Workflow); err != nil || documents != nil {
+		t.Fatalf("empty scope: got %v, %v", documents, err)
 	}
 
-	write := func(kind Kind, id, v string) {
+	write := func(kind DocumentKind, id ID, v string) {
 		t.Helper()
 		if err := s.Mkdir(kind, id); err != nil {
 			t.Fatal(err)
@@ -166,11 +166,11 @@ func TestCreateAndList(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want := []Entry{
+	want := []Document{
 		{ID: "feat-dev", Versions: parseAll(t, "0.1.0", "0.10.0", "0.2.0")},
 		{ID: "ship", Versions: parseAll(t, "1.0.0")},
 	}
-	got, err := s.List(Workflow)
+	got, skipped, err := s.List(Workflow)
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -178,13 +178,33 @@ func TestCreateAndList(t *testing.T) {
 		t.Errorf("workflows: got %v, want %v", got, want)
 	}
 
-	wantTasks := []Entry{{ID: "create-diff", Versions: parseAll(t, "0.1.0")}}
-	got, err = s.List(Task)
+	wantSkipped := []Skipped{{
+		Path:   filepath.Join(s.Dir, "wf", "ship", "notes.md"),
+		Reason: ErrNotADocument,
+	}}
+	if !reflect.DeepEqual(skipped, wantSkipped) {
+		t.Errorf("skipped: got %v, want %v", skipped, wantSkipped)
+	}
+
+	wantTasks := []Document{{ID: "create-diff", Versions: parseAll(t, "0.1.0")}}
+	got, _, err = s.List(Task)
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
 	if !reflect.DeepEqual(got, wantTasks) {
 		t.Errorf("tasks: got %v, want %v", got, wantTasks)
+	}
+}
+
+func TestNewID(t *testing.T) {
+	bad := []string{"", ".", "..", "a/b", "../etc", "wf/", string(filepath.Separator), "Bad Name", "feat_dev", "-feat", "feat-", "FeatDev"}
+	for _, in := range bad {
+		if got, err := NewID(in); err == nil {
+			t.Errorf("NewID(%q): got %q, want an error", in, got)
+		}
+	}
+	if got, err := NewID("feat-dev"); err != nil || got != ID("feat-dev") {
+		t.Errorf("NewID(\"feat-dev\"): got %q, %v", got, err)
 	}
 }
 

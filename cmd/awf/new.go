@@ -39,12 +39,16 @@ func newTaskCmd() *cobra.Command {
 	}
 }
 
-func runNew(kind store.Kind) func(*cobra.Command, []string) error {
+func runNew(kind store.DocumentKind) func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, args []string) error {
 		global, _ := cmd.Flags().GetBool("global")
 		want, _ := cmd.Flags().GetString("version")
 
-		id := args[0]
+		id, err := store.NewID(args[0])
+		if err != nil {
+			fmt.Println(formatErr(err))
+			return err
+		}
 		scope, err := store.Resolve(global)
 		if err != nil {
 			fmt.Println(formatErr(err))
@@ -61,14 +65,14 @@ func runNew(kind store.Kind) func(*cobra.Command, []string) error {
 	}
 }
 
-func formatCreated(kind store.Kind, id, path string) string {
+func formatCreated(kind store.DocumentKind, id store.ID, path string) string {
 	return fmt.Sprintf("created %s %s\n%s", kind, id, path)
 }
 
 // create writes a draft. A version already in the scope is never overwritten,
 // so the path it returns is always a new file. An unnamed version is the first
 // one for a new id, and a minor bump for an id already in the scope.
-func create(scope store.Scope, kind store.Kind, id, want string) (string, error) {
+func create(scope store.Scope, kind store.DocumentKind, id store.ID, want string) (string, error) {
 	previous, err := scope.Latest(kind, id)
 	fresh := err != nil
 
@@ -107,9 +111,9 @@ func nextVersion(fresh bool, previous version.Version) version.Version {
 	return previous.NextMinor()
 }
 
-func createWorkflow(scope store.Scope, id string, v version.Version, fresh bool, previous version.Version) ([]byte, error) {
+func createWorkflow(scope store.Scope, id store.ID, v version.Version, fresh bool, previous version.Version) ([]byte, error) {
 	if fresh {
-		return manifest.Marshal(manifest.NewWorkflow(id, v))
+		return manifest.Marshal(manifest.NewWorkflow(id.String(), v))
 	}
 
 	data, err := os.ReadFile(scope.Path(store.Workflow, id, previous))
@@ -124,9 +128,9 @@ func createWorkflow(scope store.Scope, id string, v version.Version, fresh bool,
 	return manifest.Marshal(wf)
 }
 
-func createTask(scope store.Scope, id string, v version.Version, fresh bool, previous version.Version) ([]byte, error) {
+func createTask(scope store.Scope, id store.ID, v version.Version, fresh bool, previous version.Version) ([]byte, error) {
 	if fresh {
-		return manifest.MarshalTask(manifest.NewTask(id, v))
+		return manifest.MarshalTask(manifest.NewTask(id.String(), v))
 	}
 
 	data, err := os.ReadFile(scope.Path(store.Task, id, previous))

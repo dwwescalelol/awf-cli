@@ -74,3 +74,20 @@ func (v Version) Compare(w Version) int {
 		cmp.Compare(v.Patch, w.Patch),
 	)
 }
+
+func (v Version) MarshalText() ([]byte, error) {
+	return []byte(v.String()), nil
+}
+
+func (v *Version) UnmarshalText(b []byte) error {
+	if len(b) == 0 {
+		*v = Version{}
+		return nil
+	}
+	parsed, err := Parse(string(b))
+	if err != nil {
+		return err
+	}
+	*v = parsed
+	return nil
+}

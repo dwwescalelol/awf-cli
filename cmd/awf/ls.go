@@ -26,12 +26,12 @@ func lsCmd() *cobra.Command {
 				return err
 			}
 
-			dir, entries, err := list(scope, kinds)
+			dir, listings, err := list(scope, kinds)
 			if err != nil {
 				fmt.Println(formatErr(err))
 				return err
 			}
-			fmt.Println(formatListing(dir, kinds, entries))
+			fmt.Println(formatListing(dir, kinds, listings))
 			return nil
 		},
 	}
@@ -41,11 +41,11 @@ func lsCmd() *cobra.Command {
 	return cmd
 }
 
-func kinds(workflows, tasks bool) []store.Kind {
+func kinds(workflows, tasks bool) []store.DocumentKind {
 	if !workflows && !tasks {
-		return []store.Kind{store.Workflow, store.Task}
+		return []store.DocumentKind{store.Workflow, store.Task}
 	}
-	kinds := make([]store.Kind, 0, 2)
+	kinds := make([]store.DocumentKind, 0, 2)
 	if workflows {
 		kinds = append(kinds, store.Workflow)
 	}
@@ -55,40 +55,56 @@ func kinds(workflows, tasks bool) []store.Kind {
 	return kinds
 }
 
-func list(scope store.Scope, kinds []store.Kind) (string, map[store.Kind][]store.Entry, error) {
-	entries := make(map[store.Kind][]store.Entry, len(kinds))
+type listing struct {
+	documents []store.Document
+	skipped   []store.Skipped
+}
+
+func list(scope store.Scope, kinds []store.DocumentKind) (string, map[store.DocumentKind]listing, error) {
+	listings := make(map[store.DocumentKind]listing, len(kinds))
 	for _, kind := range kinds {
-		found, err := scope.List(kind)
+		documents, skipped, err := scope.List(kind)
 		if err != nil {
 			return "", nil, err
 		}
-		entries[kind] = found
+		listings[kind] = listing{documents: documents, skipped: skipped}
 	}
-	return scope.Dir, entries, nil
+	return scope.Dir, listings, nil
 }
 
-func formatListing(dir string, kinds []store.Kind, entries map[store.Kind][]store.Entry) string {
+func formatListing(dir string, kinds []store.DocumentKind, listings map[store.DocumentKind]listing) string {
 	var b strings.Builder
 	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
 	for _, kind := range kinds {
-		for _, e := range entries[kind] {
+		for _, d := range listings[kind].documents {
 			if len(kinds) > 1 {
 				fmt.Fprintf(w, "%s\t", kind)
 			}
-			fmt.Fprintf(w, "%s\t%s\n", e.ID, versions(e))
+			fmt.Fprintf(w, "%s\t%s\n", d.ID, versions(d))
 		}
 	}
 	w.Flush()
 
-	if b.Len() == 0 {
-		return dir + "\nempty"
+	out := dir + "\nempty"
+	if b.Len() > 0 {
+		out = dir + "\n" + strings.TrimRight(b.String(), "\n")
 	}
-	return dir + "\n" + strings.TrimRight(b.String(), "\n")
+	return out + formatSkipped(kinds, listings)
 }
 
-func versions(e store.Entry) string {
-	out := make([]string, 0, len(e.Versions))
-	for _, v := range e.Versions {
+func formatSkipped(kinds []store.DocumentKind, listings map[store.DocumentKind]listing) string {
+	var b strings.Builder
+	for _, kind := range kinds {
+		for _, sk := range listings[kind].skipped {
+			fmt.Fprintf(&b, "\nwarning: %s", sk)
+		}
+	}
+	return b.String()
+}
+
+func versions(d store.Document) string {
+	out := make([]string, 0, len(d.Versions))
+	for _, v := range d.Versions {
 		out = append(out, v.String())
 	}
 	return strings.Join(out, ", ")

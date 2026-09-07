@@ -7,48 +7,47 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
-	"strings"
 
 	"github.com/dwwescalelol/awf-cli/internal/version"
 )
 
 const dirName = ".awf"
 
-// Kind is a document tree inside a scope. The value is the directory name.
-type Kind string
+type DocumentKind struct {
+	dir  string
+	ext  string
+	name string
+}
 
-const (
-	Workflow Kind = "wf"
-	Task     Kind = "task"
+var (
+	Workflow = DocumentKind{dir: "wf", ext: ".yaml", name: "workflow"}
+	Task     = DocumentKind{dir: "task", ext: ".md", name: "task"}
 )
 
-func (k Kind) String() string {
-	switch k {
-	case Workflow:
-		return "workflow"
-	case Task:
-		return "task"
+func (k DocumentKind) String() string { return k.name }
+
+type ID string
+
+var idPattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+
+func NewID(s string) (ID, error) {
+	if !idPattern.MatchString(s) {
+		return "", fmt.Errorf("%q: %w", s, ErrNotAnID)
 	}
-	return string(k)
+	return ID(s), nil
 }
 
-func (k Kind) ext() string {
-	switch k {
-	case Workflow:
-		return ".yaml"
-	case Task:
-		return ".md"
-	}
-	return ""
-}
+func (id ID) String() string { return string(id) }
 
-// Scope is one .awf directory.
+// Scope represents the structure of a .awf directory
 type Scope struct {
 	Dir string
 }
 
-// Resolve returns the scope to act on.
+// Finds the closest ansestor .awf dir from the current working dir.
+// If global is true, returns the homes ~/.awf dir.
 func Resolve(global bool) (Scope, error) {
 	if global {
 		return globalScope()
@@ -69,6 +68,11 @@ func Resolve(global bool) (Scope, error) {
 	}
 }
 
+func isDir(path string) bool {
+	fi, err := os.Stat(path)
+	return err == nil && fi.IsDir()
+}
+
 func globalScope() (Scope, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -77,106 +81,44 @@ func globalScope() (Scope, error) {
 	return Scope{Dir: filepath.Join(home, dirName)}, nil
 }
 
-func (s Scope) Path(kind Kind, id string, v version.Version) string {
-	return filepath.Join(s.Dir, string(kind), id, v.String()+kind.ext())
+func (s Scope) kindDir(kind DocumentKind) string {
+	return filepath.Join(s.Dir, kind.dir)
+}
+
+func (s Scope) docDir(kind DocumentKind, id ID) string {
+	return filepath.Join(s.kindDir(kind), string(id))
+}
+
+func (s Scope) Path(kind DocumentKind, id ID, v version.Version) string {
+	return filepath.Join(s.docDir(kind, id), v.String()+kind.ext)
 }
 
 // Mkdir makes the directory Path writes into. Scopes appear on first write.
-func (s Scope) Mkdir(kind Kind, id string) error {
-	return os.MkdirAll(filepath.Join(s.Dir, string(kind), id), 0o755)
+func (s Scope) Mkdir(kind DocumentKind, id ID) error {
+	return os.MkdirAll(s.docDir(kind, id), 0o755)
 }
 
-// Entry is an id and the versions stored under it.
-type Entry struct {
-	ID       string
-	Versions []version.Version
-}
+var ErrNotInstalled = errors.New("not installed")
 
-func (s Scope) List(kind Kind) ([]Entry, error) {
-	ids, err := os.ReadDir(filepath.Join(s.Dir, string(kind)))
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil, nil
-	}
+func (s Scope) Latest(kind DocumentKind, id ID) (version.Version, error) {
+	versions, _, err := s.versions(kind, id)
 	if err != nil {
-		return nil, err
-	}
-	// os.ReadDir sorts by filename, so both ids and versions come out in a
-	// stable order.
-	var entries []Entry
-	for _, id := range ids {
-		if !id.IsDir() {
-			continue
-		}
-		versions, err := s.versions(kind, id.Name())
-		if err != nil {
-			return nil, err
-		}
-		if len(versions) > 0 {
-			entries = append(entries, Entry{ID: id.Name(), Versions: versions})
-		}
-	}
-	return entries, nil
-}
-
-func (s Scope) versions(kind Kind, id string) ([]version.Version, error) {
-	files, err := os.ReadDir(filepath.Join(s.Dir, string(kind), id))
-	if err != nil {
-		return nil, err
-	}
-	var versions []version.Version
-	for _, f := range files {
-		name := f.Name()
-		if f.IsDir() || !strings.HasSuffix(name, kind.ext()) {
-			continue
-		}
-		v, err := version.Parse(strings.TrimSuffix(name, kind.ext()))
-		if err != nil {
-			continue
-		}
-		versions = append(versions, v)
-	}
-	return versions, nil
-}
-
-func isDir(path string) bool {
-	fi, err := os.Stat(path)
-	return err == nil && fi.IsDir()
-}
-
-// Latest is the highest version stored under an id. Versions sort numerically,
-// so 0.10.0 beats 0.9.0.
-func (s Scope) Latest(kind Kind, id string) (version.Version, error) {
-	versions, err := s.versions(kind, id)
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return version.Version{}, err
 	}
 	if len(versions) == 0 {
-		return version.Version{}, fmt.Errorf("%s %q: not installed in %s", kind, id, s.Dir)
+		return version.Version{}, fmt.Errorf("%s %q in %s: %w", kind, id, s.Dir, ErrNotInstalled)
 	}
 
 	return slices.MaxFunc(versions, version.Version.Compare), nil
 }
 
-// Locate turns a reference into a file. id@version names a stored document,
-// and a bare id its highest version. A reference that is a file on disk is
-// that file, so a path always beats an id.
-func (s Scope) Locate(kind Kind, ref string) (string, error) {
-	id, pin, pinned := strings.Cut(ref, "@")
-	if !pinned {
-		if _, err := os.Stat(ref); err == nil {
-			return ref, nil
+func (s Scope) Find(kind DocumentKind, id ID, v version.Version) (string, error) {
+	path := s.Path(kind, id, v)
+	if _, err := os.Stat(path); err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			return "", err
 		}
+		return "", fmt.Errorf("%s %q version %s in %s: %w", kind, id, v, s.Dir, ErrNotInstalled)
 	}
-	if pinned && (id == "" || pin == "") {
-		return "", fmt.Errorf("%q: not a path or id@version", ref)
-	}
-
-	v, err := s.Latest(kind, id)
-	if pinned {
-		v, err = version.Parse(pin)
-	}
-	if err != nil {
-		return "", err
-	}
-	return s.Path(kind, id, v), nil
+	return path, nil
 }

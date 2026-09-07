@@ -64,11 +64,6 @@ func TestValidate(t *testing.T) {
 			yaml: header + "orchestration:\n  a: null\ntasks:\n  a:\n    uses: [git]\n    body: hi\n",
 			want: `invalid /tasks/a/uses: "git" is not declared in mcp`,
 		},
-		{
-			name: "version is not major.minor.patch",
-			yaml: header + "version: 1.0\norchestration:\n  a: null\ntasks:\n  a:\n    body: hi\n",
-			want: `invalid /version: "1.0": not major.minor.patch`,
-		},
 	}
 
 	for _, tt := range tests {

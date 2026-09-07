@@ -7,15 +7,14 @@ import (
 
 	"github.com/dwwescalelol/awf-cli/internal/version"
 	"github.com/goccy/go-yaml"
-	"github.com/goccy/go-yaml/ast"
 )
 
 type Workflow struct {
-	OpenAWF       Version              `yaml:"openawf"`
+	OpenAWF       version.Version      `yaml:"openawf"`
 	Name          string               `yaml:"name"`
 	Summary       string               `yaml:"summary,omitempty"`
 	Model         string               `yaml:"model,omitempty"`
-	Version       Version              `yaml:"version,omitempty"`
+	Version       version.Version      `yaml:"version,omitempty"`
 	SHA           *string              `yaml:"sha"`
 	Source        string               `yaml:"source,omitempty"`
 	Start         string               `yaml:"start"`
@@ -23,32 +22,6 @@ type Workflow struct {
 	Tasks         Tasks                `yaml:"tasks"`
 	MCP           map[string]MCPServer `yaml:"mcp,omitempty"`
 	XMeta         map[string]any       `yaml:"x-meta,omitempty"`
-}
-
-// Version keeps the version exactly as authored. YAML infers `1.0` as a float,
-// and formatting that back gives "1", so a numeric scalar is taken as source
-// text rather than converted.
-type Version string
-
-func (v *Version) UnmarshalYAML(node ast.Node) error {
-	switch n := node.(type) {
-	case *ast.StringNode:
-		*v = Version(n.Value)
-	case *ast.IntegerNode, *ast.FloatNode:
-		*v = Version(n.String())
-	default:
-		return fmt.Errorf("version %s: not a version", node.Type())
-	}
-	return nil
-}
-
-// Parsed is the version as a triple. An absent version is the zero version, so
-// a document that omits an optional one still builds.
-func (v Version) Parsed() (version.Version, error) {
-	if v == "" {
-		return version.Version{}, nil
-	}
-	return version.Parse(string(v))
 }
 
 func Parse(data []byte) (*Workflow, error) {
@@ -286,17 +259,17 @@ func (e TaskEntry) MarshalYAML() (any, error) {
 }
 
 type Task struct {
-	Version  Version        `yaml:"version,omitempty"`
-	SHA      *string        `yaml:"sha,omitempty"`
-	Source   string         `yaml:"source,omitempty"`
-	Summary  string         `yaml:"summary,omitempty"`
-	Input    map[string]any `yaml:"input,omitempty"`
-	Output   map[string]any `yaml:"output,omitempty"`
-	Model    string         `yaml:"model,omitempty"`
-	Outcomes []string       `yaml:"outcomes,omitempty"`
-	Uses     []string       `yaml:"uses,omitempty"`
-	Body     string         `yaml:"body"`
-	XMeta    map[string]any `yaml:"x-meta,omitempty"`
+	Version  version.Version `yaml:"version,omitempty"`
+	SHA      *string         `yaml:"sha,omitempty"`
+	Source   string          `yaml:"source,omitempty"`
+	Summary  string          `yaml:"summary,omitempty"`
+	Input    map[string]any  `yaml:"input,omitempty"`
+	Output   map[string]any  `yaml:"output,omitempty"`
+	Model    string          `yaml:"model,omitempty"`
+	Outcomes []string        `yaml:"outcomes,omitempty"`
+	Uses     []string        `yaml:"uses,omitempty"`
+	Body     string          `yaml:"body"`
+	XMeta    map[string]any  `yaml:"x-meta,omitempty"`
 }
 
 type MCPServer struct {

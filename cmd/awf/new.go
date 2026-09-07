@@ -72,10 +72,7 @@ func create(scope store.Scope, kind store.Kind, id, want string) (string, error)
 	previous, err := scope.Latest(kind, id)
 	fresh := err != nil
 
-	v, err := nextVersion(fresh, previous)
-	if err != nil {
-		return "", err
-	}
+	v := nextVersion(fresh, previous)
 	if want != "" {
 		if v, err = version.Parse(want); err != nil {
 			return "", err
@@ -103,16 +100,16 @@ func create(scope store.Scope, kind store.Kind, id, want string) (string, error)
 	return path, os.WriteFile(path, data, 0o644)
 }
 
-func nextVersion(fresh bool, previous version.Version) (version.Version, error) {
+func nextVersion(fresh bool, previous version.Version) version.Version {
 	if fresh {
-		return version.Parse(version.First)
+		return version.FirstVersion
 	}
-	return previous.NextMinor(), nil
+	return previous.NextMinor()
 }
 
 func createWorkflow(scope store.Scope, id string, v version.Version, fresh bool, previous version.Version) ([]byte, error) {
 	if fresh {
-		return manifest.Marshal(manifest.NewWorkflow(id, manifest.Version(v.String())))
+		return manifest.Marshal(manifest.NewWorkflow(id, v))
 	}
 
 	data, err := os.ReadFile(scope.Path(store.Workflow, id, previous))
@@ -123,13 +120,13 @@ func createWorkflow(scope store.Scope, id string, v version.Version, fresh bool,
 	if err != nil {
 		return nil, err
 	}
-	wf.Redraft(manifest.Version(v.String()))
+	wf.Redraft(v)
 	return manifest.Marshal(wf)
 }
 
 func createTask(scope store.Scope, id string, v version.Version, fresh bool, previous version.Version) ([]byte, error) {
 	if fresh {
-		return manifest.MarshalTask(manifest.NewTask(id, manifest.Version(v.String())))
+		return manifest.MarshalTask(manifest.NewTask(id, v))
 	}
 
 	data, err := os.ReadFile(scope.Path(store.Task, id, previous))
@@ -140,6 +137,6 @@ func createTask(scope store.Scope, id string, v version.Version, fresh bool, pre
 	if err != nil {
 		return nil, err
 	}
-	task.Redraft(manifest.Version(v.String()))
+	task.Redraft(v)
 	return manifest.MarshalTask(task)
 }

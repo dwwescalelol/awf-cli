@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/dwwescalelol/awf-cli/internal/version"
@@ -153,13 +154,7 @@ func (s Scope) Latest(kind Kind, id string) (version.Version, error) {
 		return version.Version{}, fmt.Errorf("%s %q: not installed in %s", kind, id, s.Dir)
 	}
 
-	latest := versions[0]
-	for _, v := range versions[1:] {
-		if version.Newer(v, latest) {
-			latest = v
-		}
-	}
-	return latest, nil
+	return slices.MaxFunc(versions, version.Version.Compare), nil
 }
 
 // Locate turns a reference into a file. id@version names a stored document,

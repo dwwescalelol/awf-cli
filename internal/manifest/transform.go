@@ -18,12 +18,11 @@ func (w *Workflow) Build() *awf.Workflow {
 		states[name].Out = transitions(node, states)
 	}
 
-	version := w.Version
 	return &awf.Workflow{
 		Name:    w.Name,
 		Summary: w.Summary,
 		Model:   w.Model,
-		Version: version,
+		Version: w.Version,
 		Start:   states[w.Start],
 		States:  values(states),
 		Servers: values(servers),
@@ -53,7 +52,6 @@ func edge(on awf.Outcome, e Edge, states map[string]*awf.State) awf.Edge {
 }
 
 func task(name string, t *Task, servers map[string]*awf.MCPServer) *awf.Task {
-	version := t.Version
 	uses := make([]*awf.MCPServer, 0, len(t.Uses))
 	for _, server := range t.Uses {
 		uses = append(uses, servers[server])
@@ -64,7 +62,7 @@ func task(name string, t *Task, servers map[string]*awf.MCPServer) *awf.Task {
 	}
 	return &awf.Task{
 		Name:     name,
-		Version:  version,
+		Version:  t.Version,
 		Summary:  t.Summary,
 		Model:    t.Model,
 		Input:    t.Input,

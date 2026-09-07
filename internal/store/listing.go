@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/dwwescalelol/awf-cli/internal/version"
@@ -45,6 +46,9 @@ func (s Scope) List(kind DocumentKind) ([]Document, []Skipped, error) {
 			continue
 		}
 		name := dirEntry.Name()
+		if strings.HasPrefix(name, ".") {
+			continue
+		}
 		id, err := NewID(name)
 		if err != nil {
 			skipped = append(skipped, Skipped{
@@ -78,6 +82,9 @@ func (s Scope) versions(kind DocumentKind, id ID) ([]version.Version, []Skipped,
 	var skipped []Skipped
 	for _, dirEntry := range dirEntries {
 		name := dirEntry.Name()
+		if strings.HasPrefix(name, ".") {
+			continue
+		}
 		path := filepath.Join(s.docDir(kind, id), name)
 		switch {
 		case dirEntry.IsDir():
@@ -93,6 +100,7 @@ func (s Scope) versions(kind DocumentKind, id ID) ([]version.Version, []Skipped,
 			versions = append(versions, v)
 		}
 	}
+	slices.SortFunc(versions, version.Version.Compare)
 	return versions, skipped, nil
 }
 

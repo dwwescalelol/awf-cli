@@ -9,6 +9,12 @@ import (
 	"github.com/goccy/go-yaml"
 )
 
+var (
+	ErrNotAnEdge = errors.New("not a task name or an edge")
+	ErrNotATask  = errors.New("not a task or a $ref")
+	ErrNotTools  = errors.New(`not a tool list or "*"`)
+)
+
 type Workflow struct {
 	OpenAWF       version.Version      `yaml:"openawf"`
 	Name          string               `yaml:"name"`
@@ -24,146 +30,14 @@ type Workflow struct {
 	XMeta         map[string]any       `yaml:"x-meta,omitempty"`
 }
 
-func Parse(data []byte) (*Workflow, error) {
-	var wf Workflow
-	if err := decode(data, &wf); err != nil {
-		var pe *ParseError
-		if errors.As(err, &pe) {
-			return nil, pe
-		}
-		return nil, &ParseError{Err: err}
-	}
-	return &wf, nil
-}
-
-func Marshal(wf *Workflow) ([]byte, error) {
-	return yaml.MarshalWithOptions(wf, yaml.UseLiteralStyleIfMultiline(true))
-}
-
-// rawNode defers decoding so a map can report the key a failing value sits under.
-type rawNode []byte
-
-func (r *rawNode) UnmarshalYAML(data []byte) error {
-	*r = data
-	return nil
-}
-
-// go-yaml does not call UnmarshalYAML for a null node, so a null value leaves
-// the rawNode empty; the unions still have to see it.
-func (r rawNode) bytes() []byte {
-	if len(r) == 0 {
-		return []byte("null")
-	}
-	return r
-}
-
-func rawMap(data []byte) (map[string]rawNode, error) {
-	var m map[string]rawNode
-	if err := yaml.Unmarshal(data, &m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-// decode rejects unknown fields (the schema sets additionalProperties: false)
-// and keeps a ParseError raised further down intact.
-func decode(data []byte, v any) error {
-	err := yaml.UnmarshalWithOptions(data, v, yaml.DisallowUnknownField())
-	var pe *ParseError
-	if errors.As(err, &pe) {
-		return pe
-	}
-	return err
-}
-
-// Orchestration maps a task name to the transition out of it.
 type Orchestration map[string]Transition
 
-func (o *Orchestration) UnmarshalYAML(data []byte) error {
-	m, err := rawMap(data)
-	if err != nil {
-		return wrap("orchestration", err)
-	}
-	out := make(Orchestration, len(m))
-	for name, raw := range m {
-		var t Transition
-		if err := decode(raw.bytes(), &t); err != nil {
-			return wrap("orchestration", wrap(name, err))
-		}
-		out[name] = t
-	}
-	*o = out
-	return nil
-}
-
-// Transition is where a task goes next: an edge, a branch, or neither, which
-// ends the flow. Terminal is derived because go-yaml never calls
-// UnmarshalYAML for the null node that spells it.
 type Transition struct {
 	Edge   *Edge
 	Branch Branch
 }
 
-func (t Transition) Terminal() bool { return t.Edge == nil && t.Branch == nil }
-
-func (t *Transition) UnmarshalYAML(data []byte) error {
-	var v any
-	if err := yaml.Unmarshal(data, &v); err != nil {
-		return err
-	}
-	switch node := v.(type) {
-	case nil:
-		*t = Transition{}
-		return nil
-	case map[string]any:
-		// "task" is reserved as the marker of an edge object, so an object
-		// without it is a branch.
-		if _, ok := node["task"]; !ok {
-			var b Branch
-			if err := decode(data, &b); err != nil {
-				return err
-			}
-			*t = Transition{Branch: b}
-			return nil
-		}
-	}
-	var e Edge
-	if err := decode(data, &e); err != nil {
-		return err
-	}
-	*t = Transition{Edge: &e}
-	return nil
-}
-
-func (t Transition) MarshalYAML() (any, error) {
-	switch {
-	case t.Edge != nil:
-		return *t.Edge, nil
-	case t.Branch != nil:
-		return t.Branch, nil
-	}
-	return nil, nil
-}
-
-// Branch maps each outcome a task emits to the edge it takes.
 type Branch map[string]Edge
-
-func (b *Branch) UnmarshalYAML(data []byte) error {
-	m, err := rawMap(data)
-	if err != nil {
-		return err
-	}
-	out := make(Branch, len(m))
-	for outcome, raw := range m {
-		var e Edge
-		if err := decode(raw.bytes(), &e); err != nil {
-			return wrap(outcome, err)
-		}
-		out[outcome] = e
-	}
-	*b = out
-	return nil
-}
 
 type Edge struct {
 	Task    string `yaml:"task"`
@@ -171,91 +45,11 @@ type Edge struct {
 	Session string `yaml:"session,omitempty"`
 }
 
-func (e *Edge) UnmarshalYAML(data []byte) error {
-	var v any
-	if err := yaml.Unmarshal(data, &v); err != nil {
-		return err
-	}
-	switch node := v.(type) {
-	case nil:
-		return errors.New("edge null: not a task name or an edge")
-	case string:
-		*e = Edge{Task: node}
-		return nil
-	case map[string]any:
-		type edge Edge
-		var out edge
-		if err := decode(data, &out); err != nil {
-			return err
-		}
-		*e = Edge(out)
-		return nil
-	}
-	return fmt.Errorf("edge %T: not a task name or an edge", v)
-}
-
-func (e Edge) MarshalYAML() (any, error) {
-	if e.Retries == nil && e.Session == "" {
-		return e.Task, nil
-	}
-	type edge Edge
-	return edge(e), nil
-}
-
-// Tasks maps a task name to its definition or to a reference to one.
 type Tasks map[string]TaskEntry
 
-func (t *Tasks) UnmarshalYAML(data []byte) error {
-	m, err := rawMap(data)
-	if err != nil {
-		return wrap("tasks", err)
-	}
-	out := make(Tasks, len(m))
-	for name, raw := range m {
-		var e TaskEntry
-		if err := decode(raw.bytes(), &e); err != nil {
-			return wrap("tasks", wrap(name, err))
-		}
-		out[name] = e
-	}
-	*t = out
-	return nil
-}
-
-// TaskEntry is an inline task or a $ref to one defined elsewhere.
 type TaskEntry struct {
 	Task *Task
 	Ref  string
-}
-
-func (e *TaskEntry) UnmarshalYAML(data []byte) error {
-	var fields map[string]any
-	if err := yaml.Unmarshal(data, &fields); err != nil {
-		return err
-	}
-	if _, ok := fields["$ref"]; ok {
-		var r struct {
-			Ref string `yaml:"$ref"`
-		}
-		if err := decode(data, &r); err != nil {
-			return err
-		}
-		*e = TaskEntry{Ref: r.Ref}
-		return nil
-	}
-	var task Task
-	if err := decode(data, &task); err != nil {
-		return err
-	}
-	*e = TaskEntry{Task: &task}
-	return nil
-}
-
-func (e TaskEntry) MarshalYAML() (any, error) {
-	if e.Ref != "" {
-		return map[string]string{"$ref": e.Ref}, nil
-	}
-	return e.Task, nil
 }
 
 type Task struct {
@@ -277,30 +71,142 @@ type MCPServer struct {
 	Tools     *MCPTools `yaml:"tools,omitempty"`
 }
 
-// MCPTools is the set of tools a workflow uses from a server: every tool, or
-// a named list.
 type MCPTools struct {
 	All   bool
 	Names []string
 }
 
-func (t *MCPTools) UnmarshalYAML(data []byte) error {
-	var v any
-	if err := yaml.Unmarshal(data, &v); err != nil {
+func Unmarshal(data []byte) (*Workflow, error) {
+	var wf Workflow
+	if err := yaml.Unmarshal(data, &wf); err != nil {
+		return nil, err
+	}
+	return &wf, nil
+}
+
+func Marshal(wf *Workflow) ([]byte, error) {
+	return yaml.MarshalWithOptions(wf, yaml.UseLiteralStyleIfMultiline(true))
+}
+
+func (t *Transition) UnmarshalYAML(data []byte) error {
+	var value any
+	if err := yaml.Unmarshal(data, &value); err != nil {
 		return err
 	}
-	if s, ok := v.(string); ok {
-		if s != "*" {
-			return fmt.Errorf("tools %q: not a tool list or \"*\"", s)
+	outcomes, isMapping := value.(map[string]any)
+	_, isEdge := outcomes["task"]
+	switch {
+	case value == nil:
+		*t = Transition{}
+	case isMapping && !isEdge:
+		var branch Branch
+		if err := yaml.Unmarshal(data, &branch); err != nil {
+			return err
 		}
-		*t = MCPTools{All: true}
+		*t = Transition{Branch: branch}
+	default:
+		var edge Edge
+		if err := edge.UnmarshalYAML(data); err != nil {
+			return err
+		}
+		*t = Transition{Edge: &edge}
+	}
+	return nil
+}
+
+func (t Transition) MarshalYAML() (any, error) {
+	switch {
+	case t.Edge != nil:
+		return *t.Edge, nil
+	case t.Branch != nil:
+		return t.Branch, nil
+	}
+	return nil, nil
+}
+
+func (e *Edge) UnmarshalYAML(data []byte) error {
+	var value any
+	if err := yaml.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	switch node := value.(type) {
+	case string:
+		*e = Edge{Task: node}
+	case map[string]any:
+		type edge Edge
+		var fields edge
+		if err := yaml.Unmarshal(data, &fields); err != nil {
+			return err
+		}
+		*e = Edge(fields)
+	default:
+		return fmt.Errorf("edge %T: %w", node, ErrNotAnEdge)
+	}
+	return nil
+}
+
+func (e Edge) MarshalYAML() (any, error) {
+	if e.Retries == nil && e.Session == "" {
+		return e.Task, nil
+	}
+	type edge Edge
+	return edge(e), nil
+}
+
+func (e *TaskEntry) UnmarshalYAML(data []byte) error {
+	var value any
+	if err := yaml.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	fields, isMapping := value.(map[string]any)
+	if !isMapping {
+		return fmt.Errorf("task %T: %w", value, ErrNotATask)
+	}
+	if _, isRef := fields["$ref"]; isRef {
+		var ref struct {
+			Ref string `yaml:"$ref"`
+		}
+		if err := yaml.Unmarshal(data, &ref); err != nil {
+			return err
+		}
+		*e = TaskEntry{Ref: ref.Ref}
 		return nil
 	}
-	var names []string
-	if err := yaml.Unmarshal(data, &names); err != nil {
+	var task Task
+	if err := yaml.Unmarshal(data, &task); err != nil {
 		return err
 	}
-	*t = MCPTools{Names: names}
+	*e = TaskEntry{Task: &task}
+	return nil
+}
+
+func (e TaskEntry) MarshalYAML() (any, error) {
+	if e.Ref != "" {
+		return map[string]string{"$ref": e.Ref}, nil
+	}
+	return e.Task, nil
+}
+
+func (t *MCPTools) UnmarshalYAML(data []byte) error {
+	var value any
+	if err := yaml.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	switch node := value.(type) {
+	case string:
+		if node != "*" {
+			return fmt.Errorf("tools %q: %w", node, ErrNotTools)
+		}
+		*t = MCPTools{All: true}
+	case []any:
+		var names []string
+		if err := yaml.Unmarshal(data, &names); err != nil {
+			return err
+		}
+		*t = MCPTools{Names: names}
+	default:
+		return fmt.Errorf("tools %T: %w", node, ErrNotTools)
+	}
 	return nil
 }
 

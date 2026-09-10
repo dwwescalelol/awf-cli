@@ -6,7 +6,9 @@ import (
 	"os"
 	"strings"
 
+	"github.com/dwwescalelol/awf-cli/internal/awf"
 	"github.com/dwwescalelol/awf-cli/internal/manifest"
+	"github.com/dwwescalelol/awf-cli/internal/schema"
 	"github.com/dwwescalelol/awf-cli/internal/store"
 	"github.com/dwwescalelol/awf-cli/internal/version"
 	"github.com/spf13/cobra"
@@ -49,14 +51,15 @@ func validate(args []string, file string, global bool) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	wf, err := manifest.Parse(data)
+	if _, err := schema.Validate(data); err != nil {
+		return path, err
+	}
+	doc, err := manifest.Unmarshal(data)
 	if err != nil {
 		return path, err
 	}
-	if err := wf.Validate(); err != nil {
-		return path, err
-	}
-	return path, wf.Graph()
+	_, err = awf.Compile(doc)
+	return path, err
 }
 
 func target(args []string, file string, global bool) (string, error) {

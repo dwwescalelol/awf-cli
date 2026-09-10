@@ -102,18 +102,17 @@ func TestCheckTrap(t *testing.T) {
 	w := machine("a", map[string][]string{"a": {"b", "c"}, "b": nil, "c": {"d"}, "d": {"c"}})
 
 	err := w.Check()
-	var trap *TrapError
-	if !errors.As(err, &trap) {
-		t.Fatalf("got %v, want a *TrapError", err)
+	if !errors.Is(err, ErrNoPath) {
+		t.Fatalf("got %v, want %v", err, ErrNoPath)
 	}
 	for _, name := range []string{"c", "d"} {
-		want := fmt.Sprintf("the flow can never leave task %q", name)
+		want := fmt.Sprintf("orchestration/%s: no path to a terminal task", name)
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("%q not reported, got: %v", want, err)
 		}
 	}
 	for _, name := range []string{"a", "b"} {
-		if strings.Contains(err.Error(), fmt.Sprintf("%q", name)) {
+		if strings.Contains(err.Error(), "orchestration/"+name) {
 			t.Errorf("%q reported, got: %v", name, err)
 		}
 	}

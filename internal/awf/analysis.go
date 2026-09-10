@@ -1,6 +1,14 @@
 package awf
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
+
+var (
+	ErrNoTerminal = errors.New("no terminal task")
+	ErrNoPath     = errors.New("no path to a terminal task")
+)
 
 func (w *Workflow) TrapStates() []*State {
 	if w.Start == nil {
@@ -25,13 +33,13 @@ func (w *Workflow) Check() error {
 		return nil
 	}
 	if len(terminals(w.States)) == 0 {
-		return ErrNoTerminal
+		return fmt.Errorf("orchestration: %w", ErrNoTerminal)
 	}
 
 	trapped := w.TrapStates()
 	errs := make([]error, 0, len(trapped))
 	for _, s := range trapped {
-		errs = append(errs, &TrapError{State: s})
+		errs = append(errs, fmt.Errorf("orchestration/%s: %w", s.Task.Name, ErrNoPath))
 	}
 	return errors.Join(errs...)
 }

@@ -120,7 +120,7 @@ func createWorkflow(scope store.Scope, id store.ID, v version.Version, fresh boo
 	if err != nil {
 		return nil, err
 	}
-	wf, err := manifest.Parse(data)
+	wf, err := manifest.Unmarshal(data)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +137,7 @@ func createTask(scope store.Scope, id store.ID, v version.Version, fresh bool, p
 	if err != nil {
 		return nil, err
 	}
-	task, err := manifest.ParseTask(data)
+	task, err := manifest.UnmarshalTask(data)
 	if err != nil {
 		return nil, err
 	}

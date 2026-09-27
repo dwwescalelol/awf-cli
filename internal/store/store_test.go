@@ -20,6 +20,7 @@ func setup(t *testing.T, dirs []string, wd string) (root, home string) {
 			t.Fatal(err)
 		}
 	}
+	t.Setenv(EnvHome, "")
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Chdir(filepath.Join(root, wd))
@@ -79,8 +80,8 @@ func TestResolve(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Resolve: %v", err)
 			}
-			if resolve(t, got.Dir) != resolve(t, want) {
-				t.Errorf("got %q, want %q", got.Dir, want)
+			if resolve(t, got.Dir()) != resolve(t, want) {
+				t.Errorf("got %q, want %q", got.Dir(), want)
 			}
 		})
 	}
@@ -103,8 +104,8 @@ func TestResolveCreatesNothing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
-	if _, err := os.Stat(s.Dir); !os.IsNotExist(err) {
-		t.Errorf("%s exists after Resolve", s.Dir)
+	if _, err := os.Stat(s.Dir()); !os.IsNotExist(err) {
+		t.Errorf("%s exists after Resolve", s.Dir())
 	}
 	if entries, _ := os.ReadDir(home); len(entries) != 0 {
 		t.Errorf("home holds %v", entries)
@@ -115,7 +116,7 @@ func TestResolveCreatesNothing(t *testing.T) {
 }
 
 func TestPath(t *testing.T) {
-	s := Scope{Dir: filepath.Join("proj", ".awf")}
+	s := New(filepath.Join("proj", ".awf"))
 	tests := []struct {
 		kind DocumentKind
 		want string
@@ -133,7 +134,7 @@ func TestPath(t *testing.T) {
 }
 
 func TestCreateAndList(t *testing.T) {
-	s := Scope{Dir: filepath.Join(t.TempDir(), ".awf")}
+	s := New(filepath.Join(t.TempDir(), ".awf"))
 
 	if documents, _, err := s.List(Workflow); err != nil || documents != nil {
 		t.Fatalf("empty scope: got %v, %v", documents, err)
@@ -141,14 +142,11 @@ func TestCreateAndList(t *testing.T) {
 
 	write := func(kind DocumentKind, id ID, v string) {
 		t.Helper()
-		if err := s.Mkdir(kind, id); err != nil {
-			t.Fatal(err)
-		}
 		parsed, err := version.Parse(v)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(s.Path(kind, id, parsed), nil, 0o644); err != nil {
+		if err := s.Write(kind, id, parsed, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -159,10 +157,10 @@ func TestCreateAndList(t *testing.T) {
 	write(Task, "create-diff", "0.1.0")
 
 	// Empty ids and files of the wrong kind are not versions.
-	if err := s.Mkdir(Workflow, "drafted"); err != nil {
+	if err := os.MkdirAll(filepath.Join(s.Dir(), "wf", "drafted"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(s.Dir, "wf", "ship", "notes.md"), nil, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(s.Dir(), "wf", "ship", "notes.md"), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -179,7 +177,7 @@ func TestCreateAndList(t *testing.T) {
 	}
 
 	wantSkipped := []Skipped{{
-		Path:   filepath.Join(s.Dir, "wf", "ship", "notes.md"),
+		Path:   filepath.Join(s.Dir(), "wf", "ship", "notes.md"),
 		Reason: ErrNotADocument,
 	}}
 	if !reflect.DeepEqual(skipped, wantSkipped) {

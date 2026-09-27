@@ -33,7 +33,7 @@ func validateCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().Bool("global", false, "act on ~/.awf")
+	cmd.Flags().Bool("global", false, "act on the global store: $AWF_HOME, or ~/.awf when unset")
 	cmd.Flags().StringP("file", "f", "", "path to a document file, a task when it ends in .md")
 	cmd.Flags().BoolP("task", "t", false, "validate a task by id")
 	return cmd

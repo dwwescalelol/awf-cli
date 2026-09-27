@@ -1,9 +1,11 @@
 package store
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/dwwescalelol/awf-cli/internal/version"
@@ -180,7 +182,8 @@ func TestCreateAndList(t *testing.T) {
 		Path:   filepath.Join(s.Dir(), "wf", "ship", "notes.md"),
 		Reason: ErrNotADocument,
 	}}
-	if !reflect.DeepEqual(skipped, wantSkipped) {
+	sameSkip := func(a, b Skipped) bool { return a.Path == b.Path && errors.Is(a.Reason, b.Reason) }
+	if !slices.EqualFunc(skipped, wantSkipped, sameSkip) {
 		t.Errorf("skipped: got %v, want %v", skipped, wantSkipped)
 	}
 

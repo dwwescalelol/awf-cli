@@ -1,0 +1,46 @@
+openawf: 0.1.0
+name: feat-dev
+summary: Plan, review and ship a feature.
+model: opus
+version: 0.2.0
+sha: null
+start: plan
+orchestration:
+  plan: review
+  review:
+    fail:
+      task: plan
+      retries: 2
+    ok: ship
+  ship: null
+tasks:
+  plan:
+    sha: null
+    summary: Plan the change.
+    body: |
+      # plan
+  review:
+    sha: null
+    model: sonnet
+    outcomes:
+      - ok
+      - fail
+    uses:
+      - fs
+      - gh
+    body: |
+      # review
+  ship:
+    $ref: ./ship.md
+mcp:
+  fs:
+    transport: stdio
+    tools: "*"
+  gh:
+    transport: http
+    tools:
+      - create_pr
+      - list_issues
+  none:
+    transport: stdio
+    tools: []

@@ -6,8 +6,9 @@ import (
 )
 
 var (
-	ErrNoTerminal = errors.New("no terminal task")
-	ErrNoPath     = errors.New("no path to a terminal task")
+	ErrNoTerminal  = errors.New("no terminal task")
+	ErrNoPath      = errors.New("no path to a terminal task")
+	ErrUnreachable = errors.New("unreachable from start")
 )
 
 func (w *Workflow) TrapStates() []*State {
@@ -42,6 +43,30 @@ func (w *Workflow) Check() error {
 		errs = append(errs, fmt.Errorf("orchestration/%s: %w", s.Task.Name, ErrNoPath))
 	}
 	return errors.Join(errs...)
+}
+
+func (w *Workflow) Unreachable() []*State {
+	if w.Start == nil {
+		return nil
+	}
+	entered := reach([]*State{w.Start}, next)
+
+	var out []*State
+	for _, s := range w.States {
+		if !entered[s] {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func (w *Workflow) Warnings() []error {
+	unreachable := w.Unreachable()
+	out := make([]error, 0, len(unreachable))
+	for _, s := range unreachable {
+		out = append(out, fmt.Errorf("orchestration/%s: %w", s.Task.Name, ErrUnreachable))
+	}
+	return out
 }
 
 func terminals(states []*State) []*State {

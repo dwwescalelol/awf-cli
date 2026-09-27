@@ -1,0 +1,26 @@
+openawf: 0.1.0
+name: feat-dev
+version: 0.1.0
+sha: null
+start: plan
+orchestration:
+  plan: review
+  review:
+    ok: ship
+    fail: plan
+  ship: null
+tasks:
+  plan:
+    body: plan
+  review:
+    outcomes:
+      - ok
+      - fail
+    uses:
+      - gh
+    body: review
+  ship:
+    body: ship
+mcp:
+  gh:
+    transport: http

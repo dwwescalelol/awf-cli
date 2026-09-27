@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"text/tabwriter"
 
@@ -19,19 +20,12 @@ func lsCmd() *cobra.Command {
 			onlyWorkflows, _ := cmd.Flags().GetBool("wf")
 			onlyTasks, _ := cmd.Flags().GetBool("task")
 
-			kinds := kinds(onlyWorkflows, onlyTasks)
-			scope, err := store.Resolve(global)
+			c, err := list(onlyWorkflows, onlyTasks, global)
 			if err != nil {
-				fmt.Println(formatErr(err))
+				fmt.Fprintln(os.Stderr, formatErr(err))
 				return err
 			}
-
-			dir, listings, err := list(scope, kinds)
-			if err != nil {
-				fmt.Println(formatErr(err))
-				return err
-			}
-			fmt.Println(formatListing(dir, kinds, listings))
+			fmt.Println(formatListing(c))
 			return nil
 		},
 	}
@@ -41,7 +35,7 @@ func lsCmd() *cobra.Command {
 	return cmd
 }
 
-func kinds(workflows, tasks bool) []store.DocumentKind {
+func selected(workflows, tasks bool) []store.DocumentKind {
 	if !workflows && !tasks {
 		return []store.DocumentKind{store.Workflow, store.Task}
 	}
@@ -60,24 +54,35 @@ type listing struct {
 	skipped   []store.Skipped
 }
 
-func list(scope store.Scope, kinds []store.DocumentKind) (string, map[store.DocumentKind]listing, error) {
+type contents struct {
+	dir      string
+	kinds    []store.DocumentKind
+	listings map[store.DocumentKind]listing
+}
+
+func list(onlyWorkflows, onlyTasks, global bool) (contents, error) {
+	scope, err := store.Resolve(global)
+	if err != nil {
+		return contents{}, err
+	}
+	kinds := selected(onlyWorkflows, onlyTasks)
 	listings := make(map[store.DocumentKind]listing, len(kinds))
 	for _, kind := range kinds {
 		documents, skipped, err := scope.List(kind)
 		if err != nil {
-			return "", nil, err
+			return contents{}, err
 		}
 		listings[kind] = listing{documents: documents, skipped: skipped}
 	}
-	return scope.Dir, listings, nil
+	return contents{dir: scope.Dir(), kinds: kinds, listings: listings}, nil
 }
 
-func formatListing(dir string, kinds []store.DocumentKind, listings map[store.DocumentKind]listing) string {
+func formatListing(c contents) string {
 	var b strings.Builder
 	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
-	for _, kind := range kinds {
-		for _, d := range listings[kind].documents {
-			if len(kinds) > 1 {
+	for _, kind := range c.kinds {
+		for _, d := range c.listings[kind].documents {
+			if len(c.kinds) > 1 {
 				fmt.Fprintf(w, "%s\t", kind)
 			}
 			fmt.Fprintf(w, "%s\t%s\n", d.ID, versions(d))
@@ -85,17 +90,17 @@ func formatListing(dir string, kinds []store.DocumentKind, listings map[store.Do
 	}
 	w.Flush()
 
-	out := dir + "\nempty"
+	out := c.dir + "\nempty"
 	if b.Len() > 0 {
-		out = dir + "\n" + strings.TrimRight(b.String(), "\n")
+		out = c.dir + "\n" + strings.TrimRight(b.String(), "\n")
 	}
-	return out + formatSkipped(kinds, listings)
+	return out + formatSkipped(c)
 }
 
-func formatSkipped(kinds []store.DocumentKind, listings map[store.DocumentKind]listing) string {
+func formatSkipped(c contents) string {
 	var b strings.Builder
-	for _, kind := range kinds {
-		for _, sk := range listings[kind].skipped {
+	for _, kind := range c.kinds {
+		for _, sk := range c.listings[kind].skipped {
 			fmt.Fprintf(&b, "\nwarning: %s", sk)
 		}
 	}

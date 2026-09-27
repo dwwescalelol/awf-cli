@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -14,12 +15,23 @@ func newCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "new",
 		Short: "Create a workflow or task",
+		Args:  cobra.ArbitraryArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				return cmd.Help()
+			}
+			err := fmt.Errorf("%q: %w", args[0], errUnknownKind)
+			fmt.Fprintln(os.Stderr, formatErr(err))
+			return err
+		},
 	}
 	cmd.PersistentFlags().Bool("global", false, "act on ~/.awf")
-	cmd.PersistentFlags().StringP("version", "v", "", "version to write, defaults to the next minor")
+	cmd.PersistentFlags().String("version", "", "version to write, defaults to the next minor")
 	cmd.AddCommand(newWorkflowCmd(), newTaskCmd())
 	return cmd
 }
+
+var errUnknownKind = errors.New("uknown document kind, must be one of [task, workflow]")
 
 func newWorkflowCmd() *cobra.Command {
 	return &cobra.Command{
@@ -44,20 +56,9 @@ func runNew(kind store.DocumentKind) func(*cobra.Command, []string) error {
 		global, _ := cmd.Flags().GetBool("global")
 		want, _ := cmd.Flags().GetString("version")
 
-		id, err := store.NewID(args[0])
+		id, path, err := create(kind, args[0], want, global)
 		if err != nil {
-			fmt.Println(formatErr(err))
-			return err
-		}
-		scope, err := store.Resolve(global)
-		if err != nil {
-			fmt.Println(formatErr(err))
-			return err
-		}
-
-		path, err := create(scope, kind, id, want)
-		if err != nil {
-			fmt.Println(formatErr(err))
+			fmt.Fprintln(os.Stderr, formatErr(err))
 			return err
 		}
 		fmt.Println(formatCreated(kind, id, path))
@@ -69,39 +70,39 @@ func formatCreated(kind store.DocumentKind, id store.ID, path string) string {
 	return fmt.Sprintf("created %s %s\n%s", kind, id, path)
 }
 
-// create writes a draft. A version already in the scope is never overwritten,
-// so the path it returns is always a new file. An unnamed version is the first
-// one for a new id, and a minor bump for an id already in the scope.
-func create(scope store.Scope, kind store.DocumentKind, id store.ID, want string) (string, error) {
-	previous, err := scope.Latest(kind, id)
+func create(kind store.DocumentKind, name, want string, global bool) (store.ID, string, error) {
+	id, err := store.NewID(name)
+	if err != nil {
+		return "", "", err
+	}
+	s, err := store.Resolve(global)
+	if err != nil {
+		return "", "", err
+	}
+
+	previous, err := s.Latest(kind, id)
 	fresh := err != nil
 
 	v := nextVersion(fresh, previous)
 	if want != "" {
 		if v, err = version.Parse(want); err != nil {
-			return "", err
+			return "", "", err
 		}
-	}
-
-	path := scope.Path(kind, id, v)
-	if _, err := os.Stat(path); err == nil {
-		return "", fmt.Errorf("%s %q: version %s already exists", kind, id, v)
 	}
 
 	var data []byte
 	if kind == store.Task {
-		data, err = createTask(scope, id, v, fresh, previous)
+		data, err = draftTask(s, id, v, fresh, previous)
 	} else {
-		data, err = createWorkflow(scope, id, v, fresh, previous)
+		data, err = draftWorkflow(s, id, v, fresh, previous)
 	}
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-
-	if err := scope.Mkdir(kind, id); err != nil {
-		return "", err
+	if err := s.Write(kind, id, v, data); err != nil {
+		return "", "", err
 	}
-	return path, os.WriteFile(path, data, 0o644)
+	return id, s.Path(kind, id, v), nil
 }
 
 func nextVersion(fresh bool, previous version.Version) version.Version {
@@ -111,12 +112,11 @@ func nextVersion(fresh bool, previous version.Version) version.Version {
 	return previous.NextMinor()
 }
 
-func createWorkflow(scope store.Scope, id store.ID, v version.Version, fresh bool, previous version.Version) ([]byte, error) {
+func draftWorkflow(s *store.Store, id store.ID, v version.Version, fresh bool, previous version.Version) ([]byte, error) {
 	if fresh {
-		return manifest.Marshal(manifest.NewWorkflow(id.String(), v))
+		return manifest.Marshal(blankWorkflow(id.String(), v))
 	}
-
-	data, err := os.ReadFile(scope.Path(store.Workflow, id, previous))
+	data, err := s.Read(store.Workflow, id, previous)
 	if err != nil {
 		return nil, err
 	}
@@ -124,16 +124,15 @@ func createWorkflow(scope store.Scope, id store.ID, v version.Version, fresh boo
 	if err != nil {
 		return nil, err
 	}
-	wf.Redraft(v)
+	wf.Version, wf.SHA = v, nil
 	return manifest.Marshal(wf)
 }
 
-func createTask(scope store.Scope, id store.ID, v version.Version, fresh bool, previous version.Version) ([]byte, error) {
+func draftTask(s *store.Store, id store.ID, v version.Version, fresh bool, previous version.Version) ([]byte, error) {
 	if fresh {
-		return manifest.MarshalTask(manifest.NewTask(id.String(), v))
+		return manifest.MarshalTask(blankTask(id.String(), v))
 	}
-
-	data, err := os.ReadFile(scope.Path(store.Task, id, previous))
+	data, err := s.Read(store.Task, id, previous)
 	if err != nil {
 		return nil, err
 	}
@@ -141,6 +140,30 @@ func createTask(scope store.Scope, id store.ID, v version.Version, fresh bool, p
 	if err != nil {
 		return nil, err
 	}
-	task.Redraft(v)
+	task.Version, task.SHA = v, nil
 	return manifest.MarshalTask(task)
+}
+
+func blankWorkflow(id string, v version.Version) *manifest.Workflow {
+	const start = "start"
+	task := blankTask(start, v)
+	task.OpenAWF = version.Version{}
+	return &manifest.Workflow{
+		OpenAWF:       version.SpecVersion,
+		Name:          id,
+		Summary:       "What this workflow does.",
+		Version:       v,
+		Start:         start,
+		Orchestration: manifest.Orchestration{start: manifest.Transition{}},
+		Tasks:         manifest.Tasks{start: manifest.TaskEntry{Task: task}},
+	}
+}
+
+func blankTask(id string, v version.Version) *manifest.Task {
+	return &manifest.Task{
+		OpenAWF: version.SpecVersion,
+		Version: v,
+		Summary: "What this task does.",
+		Body:    fmt.Sprintf("# %s\n\nDescribe the work this task performs, and what it returns.\n", id),
+	}
 }

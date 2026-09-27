@@ -27,7 +27,6 @@ type Workflow struct {
 	Orchestration Orchestration        `yaml:"orchestration"`
 	Tasks         Tasks                `yaml:"tasks"`
 	MCP           map[string]MCPServer `yaml:"mcp,omitempty"`
-	XMeta         map[string]any       `yaml:"x-meta,omitempty"`
 }
 
 type Orchestration map[string]Transition
@@ -63,7 +62,6 @@ type Task struct {
 	Outcomes []string        `yaml:"outcomes,omitempty"`
 	Uses     []string        `yaml:"uses,omitempty"`
 	Body     string          `yaml:"body"`
-	XMeta    map[string]any  `yaml:"x-meta,omitempty"`
 }
 
 type MCPServer struct {

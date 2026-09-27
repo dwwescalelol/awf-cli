@@ -15,8 +15,6 @@ var (
 	ErrOpenFrontmatter = errors.New("frontmatter is never closed")
 )
 
-// UnmarshalTask reads a task file: YAML frontmatter between fences, then the
-// markdown body.
 func UnmarshalTask(data []byte) (*Task, error) {
 	rest, ok := bytes.CutPrefix(data, []byte(fence))
 	if !ok {
@@ -35,8 +33,6 @@ func UnmarshalTask(data []byte) (*Task, error) {
 	return &t, nil
 }
 
-// MarshalTask writes a task file. The body is the markdown under the
-// frontmatter, so it is never a YAML field.
 func MarshalTask(t *Task) ([]byte, error) {
 	data, err := yaml.Marshal(frontmatter{
 		Version:  t.Version,
@@ -48,7 +44,6 @@ func MarshalTask(t *Task) ([]byte, error) {
 		Model:    t.Model,
 		Outcomes: t.Outcomes,
 		Uses:     t.Uses,
-		XMeta:    t.XMeta,
 	})
 	if err != nil {
 		return nil, err
@@ -63,8 +58,6 @@ func MarshalTask(t *Task) ([]byte, error) {
 	return b.Bytes(), nil
 }
 
-// frontmatter is a Task without its body, and with the sha always written,
-// since a null sha is what marks a draft.
 type frontmatter struct {
 	Version  version.Version `yaml:"version,omitempty"`
 	SHA      *string         `yaml:"sha"`
@@ -75,5 +68,4 @@ type frontmatter struct {
 	Model    string          `yaml:"model,omitempty"`
 	Outcomes []string        `yaml:"outcomes,omitempty"`
 	Uses     []string        `yaml:"uses,omitempty"`
-	XMeta    map[string]any  `yaml:"x-meta,omitempty"`
 }

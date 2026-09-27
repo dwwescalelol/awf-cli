@@ -15,6 +15,7 @@ var (
 	ErrNotADocument = errors.New("not a document")
 	ErrNoVersion    = errors.New("missing version")
 	ErrNotSupported = errors.New("unsupported version")
+	ErrReservedBody = errors.New("reserved: the body is the markdown under the frontmatter")
 )
 
 //go:embed schemas/*.json
@@ -36,6 +37,9 @@ func ValidateTask(front []byte, body string) error {
 	fields, ok := doc.(map[string]any)
 	if !ok {
 		return fmt.Errorf("task %T: %w", doc, ErrNotADocument)
+	}
+	if _, ok := fields["body"]; ok {
+		return fmt.Errorf("body: %w", ErrReservedBody)
 	}
 	fields["body"] = body
 	return check(fields, "#/$defs/task")

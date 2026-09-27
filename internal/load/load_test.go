@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/dwwescalelol/awf-cli/internal/awf"
+	"github.com/dwwescalelol/awf-cli/internal/schema"
 )
 
 func TestWorkflow(t *testing.T) {
@@ -67,11 +68,17 @@ func TestTask(t *testing.T) {
 }
 
 func TestTaskErrors(t *testing.T) {
-	for _, file := range []string{"badtask.md", "noversion.md", "valid.yaml"} {
+	for _, file := range []string{"badtask.md", "noversion.md", "valid.yaml", "bodykey.md"} {
 		t.Run(file, func(t *testing.T) {
 			if _, err := Task(filepath.Join("testdata", file)); err == nil {
 				t.Error("got no error")
 			}
 		})
+	}
+}
+
+func TestTaskReservedBody(t *testing.T) {
+	if _, err := Task(filepath.Join("testdata", "bodykey.md")); !errors.Is(err, schema.ErrReservedBody) {
+		t.Errorf("got %v, want %v", err, schema.ErrReservedBody)
 	}
 }

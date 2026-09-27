@@ -125,3 +125,32 @@ func TestCheckReachesATerminal(t *testing.T) {
 		t.Fatalf("got %v, want nil", err)
 	}
 }
+
+func TestWarnings(t *testing.T) {
+	tests := []struct {
+		name  string
+		edges map[string][]string
+		want  []string
+	}{
+		{name: "all reached", edges: map[string][]string{"a": {"b"}, "b": nil}},
+		{name: "unreachable terminal", edges: map[string][]string{"a": nil, "b": nil}, want: []string{"b"}},
+		{name: "unreachable trap", edges: map[string][]string{"a": nil, "b": {"b"}}, want: []string{"b"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := machine("a", tt.edges)
+			got := w.Warnings()
+			if len(got) != len(tt.want) {
+				t.Fatalf("got %v, want %v", got, tt.want)
+			}
+			for i, name := range tt.want {
+				if !errors.Is(got[i], ErrUnreachable) || !strings.Contains(got[i].Error(), name) {
+					t.Errorf("got %v, want %s unreachable", got[i], name)
+				}
+			}
+			if err := w.Check(); err != nil {
+				t.Errorf("Check: %v", err)
+			}
+		})
+	}
+}

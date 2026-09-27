@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/dwwescalelol/awf-cli/internal/version"
@@ -19,6 +20,7 @@ func main() {
 	root.AddCommand(lsCmd(), newCmd(), validateCmd())
 
 	if err := root.Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, formatErr(err))
 		os.Exit(1)
 	}
 }

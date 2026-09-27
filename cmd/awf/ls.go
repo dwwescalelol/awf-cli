@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"text/tabwriter"
 
@@ -22,7 +21,6 @@ func lsCmd() *cobra.Command {
 
 			c, err := list(onlyWorkflows, onlyTasks, global)
 			if err != nil {
-				fmt.Fprintln(os.Stderr, formatErr(err))
 				return err
 			}
 			fmt.Println(formatListing(c))

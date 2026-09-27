@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"os"
 
 	"github.com/dwwescalelol/awf-cli/internal/manifest"
 	"github.com/dwwescalelol/awf-cli/internal/store"
@@ -20,9 +19,7 @@ func newCmd() *cobra.Command {
 			if len(args) == 0 {
 				return cmd.Help()
 			}
-			err := fmt.Errorf("%q: %w", args[0], errUnknownKind)
-			fmt.Fprintln(os.Stderr, formatErr(err))
-			return err
+			return fmt.Errorf("%q: %w", args[0], errUnknownKind)
 		},
 	}
 	cmd.PersistentFlags().Bool("global", false, "act on ~/.awf")
@@ -58,7 +55,6 @@ func runNew(kind store.DocumentKind) func(*cobra.Command, []string) error {
 
 		id, path, err := create(kind, args[0], want, global)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, formatErr(err))
 			return err
 		}
 		fmt.Println(formatCreated(kind, id, path))

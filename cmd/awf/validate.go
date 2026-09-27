@@ -24,7 +24,6 @@ func validateCmd() *cobra.Command {
 
 			path, warnings, err := validate(args, file, task, global)
 			if err != nil {
-				fmt.Fprintln(os.Stderr, formatErr(err))
 				return err
 			}
 			fmt.Println(formatValid(path))

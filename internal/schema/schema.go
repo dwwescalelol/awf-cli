@@ -25,18 +25,32 @@ func Validate(data []byte) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	return doc, check(doc, "")
+}
+
+func ValidateTask(front []byte, body string) error {
+	doc, err := decode(front)
+	if err != nil {
+		return err
+	}
+	fields, ok := doc.(map[string]any)
+	if !ok {
+		return fmt.Errorf("task %T: %w", doc, ErrNotADocument)
+	}
+	fields["body"] = body
+	return check(fields, "#/$defs/task")
+}
+
+func check(doc any, pointer string) error {
 	version, err := versionOf(doc)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	sch, err := load(version)
+	sch, err := load(version, pointer)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	if err := sch.Validate(doc); err != nil {
-		return nil, err
-	}
-	return doc, nil
+	return sch.Validate(doc)
 }
 
 func decode(data []byte) (any, error) {
@@ -50,7 +64,7 @@ func decode(data []byte) (any, error) {
 func versionOf(doc any) (string, error) {
 	fields, ok := doc.(map[string]any)
 	if !ok {
-		return "", fmt.Errorf("workflow %T: %w", doc, ErrNotADocument)
+		return "", fmt.Errorf("document %T: %w", doc, ErrNotADocument)
 	}
 	version, ok := fields["openawf"].(string)
 	if !ok {
@@ -59,7 +73,7 @@ func versionOf(doc any) (string, error) {
 	return version, nil
 }
 
-func load(version string) (*jsonschema.Schema, error) {
+func load(version, pointer string) (*jsonschema.Schema, error) {
 	name := "schemas/" + version + ".json"
 	file, err := schemas.Open(name)
 	if err != nil {
@@ -76,5 +90,5 @@ func load(version string) (*jsonschema.Schema, error) {
 	if err := c.AddResource(id, doc); err != nil {
 		return nil, err
 	}
-	return c.Compile(id)
+	return c.Compile(id + pointer)
 }

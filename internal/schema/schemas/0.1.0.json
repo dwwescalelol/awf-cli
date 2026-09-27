@@ -185,6 +185,11 @@
       ],
       "additionalProperties": false,
       "properties": {
+        "openawf": {
+          "description": "The OpenAWF version a standalone task file is written against. Omitted on inline tasks.",
+          "type": "string",
+          "const": "0.1.0"
+        },
         "version": {
           "description": "The task's version (identity). A human version string.",
           "type": "string",

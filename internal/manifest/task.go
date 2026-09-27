@@ -23,7 +23,7 @@ func SplitTask(data []byte) ([]byte, string, error) {
 	if !ok {
 		return nil, "", ErrOpenFrontmatter
 	}
-	return front, string(bytes.TrimLeft(body, "\n")), nil
+	return data[:len(fence)+len(front)], string(bytes.TrimLeft(body, "\n")), nil
 }
 
 func UnmarshalTask(data []byte) (*Task, error) {

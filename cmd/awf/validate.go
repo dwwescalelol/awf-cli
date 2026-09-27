@@ -51,61 +51,89 @@ func formatWarnings(warnings []error) string {
 	return strings.Join(lines, "\n")
 }
 
+var (
+	errWrongName    = errors.New("name does not match the id it is stored under")
+	errWrongVersion = errors.New("version does not match the version it is stored under")
+)
+
+type stored struct {
+	id      store.ID
+	version version.Version
+}
+
 func validate(args []string, file string, task, global bool) (string, []error, error) {
 	kind := store.Workflow
 	if task || strings.HasSuffix(file, ".md") {
 		kind = store.Task
 	}
-	path, err := target(kind, args, file, global)
+	path, at, err := target(kind, args, file, global)
 	if err != nil {
 		return "", nil, err
 	}
 	if kind == store.Task {
-		_, err = load.Task(path)
-		return path, nil, err
+		t, err := load.Task(path)
+		if err != nil {
+			return path, nil, err
+		}
+		return path, nil, at.check("", t.Version)
 	}
 	w, err := load.Workflow(path)
 	if err != nil {
 		return path, nil, err
 	}
-	return path, w.Warnings(), nil
+	return path, w.Warnings(), at.check(w.Name, w.Version)
 }
 
-func target(kind store.DocumentKind, args []string, file string, global bool) (string, error) {
+func (at *stored) check(name string, v version.Version) error {
+	if at == nil {
+		return nil
+	}
+	var errs []error
+	if name != "" && name != at.id.String() {
+		errs = append(errs, fmt.Errorf("name %q, stored as %q: %w", name, at.id, errWrongName))
+	}
+	if v.Compare(at.version) != 0 {
+		errs = append(errs, fmt.Errorf("version %s, stored as %s: %w", v, at.version, errWrongVersion))
+	}
+	return errors.Join(errs...)
+}
+
+func target(kind store.DocumentKind, args []string, file string, global bool) (string, *stored, error) {
 	if file == "" && len(args) == 0 {
-		return "", errors.New("give an id or -f")
+		return "", nil, errors.New("give an id or -f")
 	}
 	if file != "" && len(args) > 0 {
-		return "", errors.New("give an id or -f, not both")
+		return "", nil, errors.New("give an id or -f, not both")
 	}
 	if file != "" {
-		return file, nil
+		return file, nil, nil
 	}
 
 	scope, err := store.Resolve(global)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	return locate(scope, kind, args[0])
 }
 
-func locate(scope *store.Store, kind store.DocumentKind, ref string) (string, error) {
+func locate(scope *store.Store, kind store.DocumentKind, ref string) (string, *stored, error) {
 	name, pin, pinned := strings.Cut(ref, "@")
 	id, err := store.NewID(name)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
+	var v version.Version
 	if pinned {
-		v, err := version.Parse(pin)
-		if err != nil {
-			return "", err
-		}
-		return scope.Find(kind, id, v)
+		v, err = version.Parse(pin)
+	} else {
+		v, err = scope.Latest(kind, id)
 	}
-
-	v, err := scope.Latest(kind, id)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
-	return scope.Find(kind, id, v)
+	path, err := scope.Find(kind, id, v)
+	if err != nil {
+		return "", nil, err
+	}
+	return path, &stored{id: id, version: v}, nil
 }

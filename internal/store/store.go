@@ -82,7 +82,20 @@ func FindDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = resolved
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	if resolved, err := filepath.EvalSymlinks(home); err == nil {
+		home = resolved
+	}
 	for {
+		if dir == home {
+			return GlobalDir()
+		}
 		candidate := filepath.Join(dir, dirName)
 		if isDir(candidate) {
 			return candidate, nil

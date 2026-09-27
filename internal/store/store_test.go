@@ -35,6 +35,7 @@ func TestResolve(t *testing.T) {
 		dirs   []string
 		wd     string
 		global bool
+		env    string
 		want   string // relative to root, or "" for the global scope
 	}{
 		{
@@ -63,6 +64,25 @@ func TestResolve(t *testing.T) {
 			want:   "",
 		},
 		{
+			name: "project under home",
+			dirs: []string{"home/proj/.awf", "home/proj/a"},
+			wd:   "home/proj/a",
+			want: "home/proj/.awf",
+		},
+		{
+			name: "under home without a project",
+			dirs: []string{"home/.awf", "home/loose"},
+			wd:   "home/loose",
+			want: "",
+		},
+		{
+			name: "under home without a project, AWF_HOME set",
+			dirs: []string{"home/.awf", "home/loose", "elsewhere"},
+			wd:   "home/loose",
+			env:  "elsewhere",
+			want: "elsewhere",
+		},
+		{
 			name: "outside a project",
 			dirs: []string{"loose"},
 			wd:   "loose",
@@ -73,6 +93,9 @@ func TestResolve(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			root, home := setup(t, tt.dirs, tt.wd)
+			if tt.env != "" {
+				t.Setenv(EnvHome, filepath.Join(root, tt.env))
+			}
 			want := filepath.Join(home, ".awf")
 			if tt.want != "" {
 				want = filepath.Join(root, tt.want)

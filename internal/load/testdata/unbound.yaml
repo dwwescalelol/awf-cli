@@ -1,0 +1,11 @@
+openawf: 0.1.0
+name: feat-dev
+sha: null
+start: plan
+orchestration:
+  plan: missing
+tasks:
+  plan:
+    uses:
+      - gh
+    body: plan

@@ -1,4 +1,4 @@
-package awf
+package load
 
 import (
 	"errors"
@@ -6,6 +6,7 @@ import (
 	"maps"
 	"slices"
 
+	"github.com/dwwescalelol/awf-cli/internal/awf"
 	"github.com/dwwescalelol/awf-cli/internal/manifest"
 )
 
@@ -20,10 +21,10 @@ var (
 	ErrNoEdge        = errors.New("no edge")
 )
 
-// Compile lowers a document into the machine it describes, binding every name
+// compile lowers a document into the machine it describes, binding every name
 // to what it names. It reports every unbound name at once, and yields a
 // machine only when all of them bind.
-func Compile(doc *manifest.Workflow) (*Workflow, error) {
+func compile(doc *manifest.Workflow) (*awf.Workflow, error) {
 	servers := servers(doc.MCP)
 	states, errs := states(doc, servers)
 
@@ -46,7 +47,7 @@ func Compile(doc *manifest.Workflow) (*Workflow, error) {
 		return nil, errors.Join(errs...)
 	}
 
-	w := &Workflow{
+	w := &awf.Workflow{
 		Name:    doc.Name,
 		Summary: doc.Summary,
 		Model:   doc.Model,
@@ -58,8 +59,8 @@ func Compile(doc *manifest.Workflow) (*Workflow, error) {
 	return w, w.Check()
 }
 
-func states(doc *manifest.Workflow, servers map[string]*MCPServer) (map[string]*State, []error) {
-	out := make(map[string]*State, len(doc.Tasks))
+func states(doc *manifest.Workflow, servers map[string]*awf.MCPServer) (map[string]*awf.State, []error) {
+	out := make(map[string]*awf.State, len(doc.Tasks))
 	var errs []error
 
 	for _, name := range sorted(doc.Tasks) {
@@ -70,22 +71,22 @@ func states(doc *manifest.Workflow, servers map[string]*MCPServer) (map[string]*
 		if entry.Task == nil {
 			// An edge to this task still binds, so the $ref is reported once.
 			errs = append(errs, fmt.Errorf("tasks/%s: %w %q", name, ErrUnresolvedRef, entry.Ref))
-			out[name] = &State{Task: &Task{Name: name}}
+			out[name] = &awf.State{Task: &awf.Task{Name: name}}
 			continue
 		}
 		t, e := task(name, entry.Task, doc.Model, servers)
-		out[name], errs = &State{Task: t}, append(errs, e...)
+		out[name], errs = &awf.State{Task: t}, append(errs, e...)
 	}
 	return out, errs
 }
 
-func task(name string, doc *manifest.Task, model string, servers map[string]*MCPServer) (*Task, []error) {
+func task(name string, doc *manifest.Task, model string, servers map[string]*awf.MCPServer) (*awf.Task, []error) {
 	if doc.Model != "" {
 		model = doc.Model
 	}
 
 	var errs []error
-	uses := make([]*MCPServer, 0, len(doc.Uses))
+	uses := make([]*awf.MCPServer, 0, len(doc.Uses))
 	for _, use := range doc.Uses {
 		server, ok := servers[use]
 		if !ok {
@@ -95,12 +96,12 @@ func task(name string, doc *manifest.Task, model string, servers map[string]*MCP
 		uses = append(uses, server)
 	}
 
-	outcomes := make([]Outcome, 0, len(doc.Outcomes))
+	outcomes := make([]awf.Outcome, 0, len(doc.Outcomes))
 	for _, outcome := range doc.Outcomes {
-		outcomes = append(outcomes, Outcome(outcome))
+		outcomes = append(outcomes, awf.Outcome(outcome))
 	}
 
-	return &Task{
+	return &awf.Task{
 		Name:     name,
 		Version:  doc.Version,
 		Summary:  doc.Summary,
@@ -116,7 +117,7 @@ func task(name string, doc *manifest.Task, model string, servers map[string]*MCP
 // edges binds a transition to the states it leaves for. A task that emits
 // outcomes branches on all of them; one that emits none ends the flow or takes
 // a single edge.
-func edges(name string, node manifest.Transition, states map[string]*State) ([]Edge, []error) {
+func edges(name string, node manifest.Transition, states map[string]*awf.State) ([]awf.Edge, []error) {
 	path := "orchestration/" + name
 	outcomes := states[name].Task.Outcomes
 
@@ -132,7 +133,7 @@ func edges(name string, node manifest.Transition, states map[string]*State) ([]E
 			return nil, []error{fmt.Errorf("%s: %w on %q", path, ErrMustBranch, outcomes)}
 		}
 		e, errs := edge(path, "", *node.Edge, states)
-		return []Edge{e}, errs
+		return []awf.Edge{e}, errs
 	}
 
 	if len(outcomes) == 0 {
@@ -140,13 +141,13 @@ func edges(name string, node manifest.Transition, states map[string]*State) ([]E
 	}
 
 	var errs []error
-	out := make([]Edge, 0, len(node.Branch))
+	out := make([]awf.Edge, 0, len(node.Branch))
 	for _, on := range sorted(node.Branch) {
-		if !slices.Contains(outcomes, Outcome(on)) {
+		if !slices.Contains(outcomes, awf.Outcome(on)) {
 			errs = append(errs, fmt.Errorf("%s/%s: %w of %q", path, on, ErrNotAnOutcome, name))
 			continue
 		}
-		e, err := edge(path+"/"+on, Outcome(on), node.Branch[on], states)
+		e, err := edge(path+"/"+on, awf.Outcome(on), node.Branch[on], states)
 		out, errs = append(out, e), append(errs, err...)
 	}
 	for _, on := range outcomes {
@@ -157,26 +158,26 @@ func edges(name string, node manifest.Transition, states map[string]*State) ([]E
 	return out, errs
 }
 
-func edge(path string, on Outcome, doc manifest.Edge, states map[string]*State) (Edge, []error) {
+func edge(path string, on awf.Outcome, doc manifest.Edge, states map[string]*awf.State) (awf.Edge, []error) {
 	to, ok := states[doc.Task]
 	if !ok {
-		return Edge{}, []error{fmt.Errorf("%s %q: %w", path, doc.Task, ErrNotATask)}
+		return awf.Edge{}, []error{fmt.Errorf("%s %q: %w", path, doc.Task, ErrNotATask)}
 	}
-	session := Session(doc.Session)
+	session := awf.Session(doc.Session)
 	if session == "" {
-		session = Fresh
+		session = awf.Fresh
 	}
-	return Edge{On: on, To: to, Retries: doc.Retries, Session: session}, nil
+	return awf.Edge{On: on, To: to, Retries: doc.Retries, Session: session}, nil
 }
 
-func servers(docs map[string]manifest.MCPServer) map[string]*MCPServer {
-	out := make(map[string]*MCPServer, len(docs))
+func servers(docs map[string]manifest.MCPServer) map[string]*awf.MCPServer {
+	out := make(map[string]*awf.MCPServer, len(docs))
 	for name, doc := range docs {
-		tools := Tools{All: true}
+		tools := awf.Tools{All: true}
 		if doc.Tools != nil {
-			tools = Tools{All: doc.Tools.All, Names: doc.Tools.Names}
+			tools = awf.Tools{All: doc.Tools.All, Names: doc.Tools.Names}
 		}
-		out[name] = &MCPServer{Name: name, Transport: Transport(doc.Transport), Tools: tools}
+		out[name] = &awf.MCPServer{Name: name, Transport: awf.Transport(doc.Transport), Tools: tools}
 	}
 	return out
 }

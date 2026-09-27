@@ -23,7 +23,7 @@ func newCmd() *cobra.Command {
 		},
 	}
 	cmd.PersistentFlags().Bool("global", false, "act on the global store: $AWF_HOME, or ~/.awf when unset")
-	cmd.PersistentFlags().String("version", "", "version to write, defaults to the next minor")
+	cmd.PersistentFlags().String("version", "", "version to write, defaults to the next minor; a new version of an existing id copies its latest version")
 	cmd.AddCommand(newWorkflowCmd(), newTaskCmd())
 	return cmd
 }
@@ -53,27 +53,34 @@ func runNew(kind store.DocumentKind) func(*cobra.Command, []string) error {
 		global, _ := cmd.Flags().GetBool("global")
 		want, _ := cmd.Flags().GetString("version")
 
-		id, path, err := create(kind, args[0], want, global)
+		d, err := create(kind, args[0], want, global)
 		if err != nil {
 			return err
 		}
-		fmt.Println(formatCreated(kind, id, path))
+		fmt.Println(formatCreated(d))
 		return nil
 	}
 }
 
-func formatCreated(kind store.DocumentKind, id store.ID, path string) string {
-	return fmt.Sprintf("created %s %s\n%s", kind, id, path)
+type draft struct {
+	kind    store.DocumentKind
+	id      store.ID
+	version version.Version
+	path    string
 }
 
-func create(kind store.DocumentKind, name, want string, global bool) (store.ID, string, error) {
+func formatCreated(d draft) string {
+	return fmt.Sprintf("created %s %s@%s\n%s", d.kind, d.id, d.version, d.path)
+}
+
+func create(kind store.DocumentKind, name, want string, global bool) (draft, error) {
 	id, err := store.NewID(name)
 	if err != nil {
-		return "", "", err
+		return draft{}, err
 	}
 	s, err := store.Resolve(global)
 	if err != nil {
-		return "", "", err
+		return draft{}, err
 	}
 
 	previous, err := s.Latest(kind, id)
@@ -82,7 +89,7 @@ func create(kind store.DocumentKind, name, want string, global bool) (store.ID, 
 	v := nextVersion(fresh, previous)
 	if want != "" {
 		if v, err = version.Parse(want); err != nil {
-			return "", "", err
+			return draft{}, err
 		}
 	}
 
@@ -93,12 +100,12 @@ func create(kind store.DocumentKind, name, want string, global bool) (store.ID, 
 		data, err = draftWorkflow(s, id, v, fresh, previous)
 	}
 	if err != nil {
-		return "", "", err
+		return draft{}, err
 	}
 	if err := s.Write(kind, id, v, data); err != nil {
-		return "", "", err
+		return draft{}, err
 	}
-	return id, s.Path(kind, id, v), nil
+	return draft{kind: kind, id: id, version: v, path: s.Path(kind, id, v)}, nil
 }
 
 func nextVersion(fresh bool, previous version.Version) version.Version {

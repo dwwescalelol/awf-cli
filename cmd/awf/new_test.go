@@ -25,7 +25,8 @@ func project(t *testing.T) string {
 func TestCreateWorkflow(t *testing.T) {
 	project(t)
 
-	_, first, err := create(store.Workflow, "feat-dev", "", false)
+	firstDraft, err := create(store.Workflow, "feat-dev", "", false)
+	first := firstDraft.path
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -36,7 +37,8 @@ func TestCreateWorkflow(t *testing.T) {
 		t.Errorf("blank workflow does not load: %v", err)
 	}
 
-	_, second, err := create(store.Workflow, "feat-dev", "", false)
+	secondDraft, err := create(store.Workflow, "feat-dev", "", false)
+	second := secondDraft.path
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -59,7 +61,8 @@ func TestCreateWorkflow(t *testing.T) {
 func TestCreateCopiesPrevious(t *testing.T) {
 	project(t)
 
-	_, first, err := create(store.Workflow, "feat-dev", "", false)
+	firstDraft, err := create(store.Workflow, "feat-dev", "", false)
+	first := firstDraft.path
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +84,8 @@ func TestCreateCopiesPrevious(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, second, err := create(store.Workflow, "feat-dev", "", false)
+	secondDraft, err := create(store.Workflow, "feat-dev", "", false)
+	second := secondDraft.path
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +108,8 @@ func TestCreateCopiesPrevious(t *testing.T) {
 func TestCreateTask(t *testing.T) {
 	project(t)
 
-	_, path, err := create(store.Task, "create-diff", "", false)
+	pathDraft, err := create(store.Task, "create-diff", "", false)
+	path := pathDraft.path
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -124,14 +129,15 @@ func TestCreateTask(t *testing.T) {
 func TestCreatePinned(t *testing.T) {
 	project(t)
 
-	_, path, err := create(store.Workflow, "feat-dev", "0.4.0", false)
+	pathDraft, err := create(store.Workflow, "feat-dev", "0.4.0", false)
+	path := pathDraft.path
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
 	if filepath.Base(path) != "0.4.0.yaml" {
 		t.Errorf("got %s, want 0.4.0.yaml", path)
 	}
-	if _, _, err := create(store.Workflow, "feat-dev", "0.4.0", false); !errors.Is(err, store.ErrExists) {
+	if _, err := create(store.Workflow, "feat-dev", "0.4.0", false); !errors.Is(err, store.ErrExists) {
 		t.Errorf("again: got %v, want %v", err, store.ErrExists)
 	}
 }
@@ -139,10 +145,10 @@ func TestCreatePinned(t *testing.T) {
 func TestCreateRejects(t *testing.T) {
 	project(t)
 
-	if _, _, err := create(store.Workflow, "Bad Name", "", false); !errors.Is(err, store.ErrNotAnID) {
+	if _, err := create(store.Workflow, "Bad Name", "", false); !errors.Is(err, store.ErrNotAnID) {
 		t.Errorf("bad id: got %v, want %v", err, store.ErrNotAnID)
 	}
-	if _, _, err := create(store.Workflow, "feat-dev", "one", false); err == nil {
+	if _, err := create(store.Workflow, "feat-dev", "one", false); err == nil {
 		t.Error("bad version: got no error")
 	}
 }
@@ -150,7 +156,8 @@ func TestCreateRejects(t *testing.T) {
 func TestCreateGlobal(t *testing.T) {
 	root := project(t)
 
-	_, path, err := create(store.Task, "create-diff", "", true)
+	pathDraft, err := create(store.Task, "create-diff", "", true)
+	path := pathDraft.path
 	if err != nil {
 		t.Fatal(err)
 	}

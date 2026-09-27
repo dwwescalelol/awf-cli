@@ -22,12 +22,15 @@ func validateCmd() *cobra.Command {
 			file, _ := cmd.Flags().GetString("file")
 			task, _ := cmd.Flags().GetBool("task")
 
-			path, err := validate(args, file, task, global)
+			path, warnings, err := validate(args, file, task, global)
 			if err != nil {
 				fmt.Fprintln(os.Stderr, formatErr(err))
 				return err
 			}
 			fmt.Println(formatValid(path))
+			if len(warnings) > 0 {
+				fmt.Fprintln(os.Stderr, formatWarnings(warnings))
+			}
 			return nil
 		},
 	}
@@ -41,21 +44,32 @@ func formatValid(path string) string { return path + "\nvalid" }
 
 func formatErr(err error) string { return err.Error() }
 
-func validate(args []string, file string, task, global bool) (string, error) {
+func formatWarnings(warnings []error) string {
+	lines := make([]string, 0, len(warnings))
+	for _, w := range warnings {
+		lines = append(lines, "warning: "+w.Error())
+	}
+	return strings.Join(lines, "\n")
+}
+
+func validate(args []string, file string, task, global bool) (string, []error, error) {
 	kind := store.Workflow
 	if task || strings.HasSuffix(file, ".md") {
 		kind = store.Task
 	}
 	path, err := target(kind, args, file, global)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if kind == store.Task {
 		_, err = load.Task(path)
-	} else {
-		_, err = load.Workflow(path)
+		return path, nil, err
 	}
-	return path, err
+	w, err := load.Workflow(path)
+	if err != nil {
+		return path, nil, err
+	}
+	return path, w.Warnings(), nil
 }
 
 func target(kind store.DocumentKind, args []string, file string, global bool) (string, error) {

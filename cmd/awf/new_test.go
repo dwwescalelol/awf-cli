@@ -166,3 +166,19 @@ func TestCreateGlobal(t *testing.T) {
 		t.Errorf("got %s, want %s", path, want)
 	}
 }
+
+func TestCreateUnreadable(t *testing.T) {
+	root := project(t)
+	if _, err := create(store.Task, "create-diff", "", false); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(root, ".awf", "task", "create-diff")
+	if err := os.Chmod(dir, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o755) })
+
+	if _, err := create(store.Task, "create-diff", "", false); err == nil || errors.Is(err, store.ErrExists) {
+		t.Errorf("got %v, want the read error", err)
+	}
+}

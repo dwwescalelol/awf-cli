@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 
-	"github.com/dwwescalelol/awf-cli/internal/version"
 	"github.com/goccy/go-yaml"
 )
 
@@ -15,36 +14,35 @@ var (
 	ErrOpenFrontmatter = errors.New("frontmatter is never closed")
 )
 
-func UnmarshalTask(data []byte) (*Task, error) {
+func SplitTask(data []byte) ([]byte, string, error) {
 	rest, ok := bytes.CutPrefix(data, []byte(fence))
 	if !ok {
-		return nil, ErrNoFrontmatter
+		return nil, "", ErrNoFrontmatter
 	}
 	front, body, ok := bytes.Cut(rest, []byte("\n"+fence))
 	if !ok {
-		return nil, ErrOpenFrontmatter
+		return nil, "", ErrOpenFrontmatter
 	}
+	return front, string(bytes.TrimLeft(body, "\n")), nil
+}
 
+func UnmarshalTask(data []byte) (*Task, error) {
+	front, body, err := SplitTask(data)
+	if err != nil {
+		return nil, err
+	}
 	var t Task
 	if err := yaml.Unmarshal(front, &t); err != nil {
 		return nil, err
 	}
-	t.Body = string(bytes.TrimLeft(body, "\n"))
+	t.Body = body
 	return &t, nil
 }
 
 func MarshalTask(t *Task) ([]byte, error) {
-	data, err := yaml.Marshal(frontmatter{
-		Version:  t.Version,
-		SHA:      t.SHA,
-		Source:   t.Source,
-		Summary:  t.Summary,
-		Input:    t.Input,
-		Output:   t.Output,
-		Model:    t.Model,
-		Outcomes: t.Outcomes,
-		Uses:     t.Uses,
-	})
+	front := *t
+	front.Body = ""
+	data, err := yaml.MarshalWithOptions(front, yaml.IndentSequence(true))
 	if err != nil {
 		return nil, err
 	}
@@ -56,16 +54,4 @@ func MarshalTask(t *Task) ([]byte, error) {
 	b.WriteString("\n")
 	b.WriteString(t.Body)
 	return b.Bytes(), nil
-}
-
-type frontmatter struct {
-	Version  version.Version `yaml:"version,omitempty"`
-	SHA      *string         `yaml:"sha"`
-	Source   string          `yaml:"source,omitempty"`
-	Summary  string          `yaml:"summary,omitempty"`
-	Input    map[string]any  `yaml:"input,omitempty"`
-	Output   map[string]any  `yaml:"output,omitempty"`
-	Model    string          `yaml:"model,omitempty"`
-	Outcomes []string        `yaml:"outcomes,omitempty"`
-	Uses     []string        `yaml:"uses,omitempty"`
 }

@@ -84,7 +84,10 @@ func create(kind store.DocumentKind, name, want string, global bool) (draft, err
 	}
 
 	previous, err := s.Latest(kind, id)
-	fresh := err != nil
+	fresh := errors.Is(err, store.ErrNotInstalled)
+	if err != nil && !fresh {
+		return draft{}, err
+	}
 
 	v := nextVersion(fresh, previous)
 	if want != "" {

@@ -10,9 +10,10 @@ import (
 )
 
 var (
-	ErrNotAnEdge = errors.New("not a task name or an edge")
-	ErrNotATask  = errors.New("not a task or a $ref")
-	ErrNotTools  = errors.New(`not a tool list or "*"`)
+	ErrNotAnEdge   = errors.New("not a task name or an edge")
+	ErrNotATask    = errors.New("not a task or a $ref")
+	ErrNotTools    = errors.New(`not a tool list or "*"`)
+	ErrSHAMismatch = errors.New("sha does not match content")
 )
 
 type Workflow struct {
@@ -52,8 +53,9 @@ type TaskEntry struct {
 }
 
 type Task struct {
+	OpenAWF  version.Version `yaml:"openawf,omitempty"`
 	Version  version.Version `yaml:"version,omitempty"`
-	SHA      *string         `yaml:"sha,omitempty"`
+	SHA      *string         `yaml:"sha"`
 	Source   string          `yaml:"source,omitempty"`
 	Summary  string          `yaml:"summary,omitempty"`
 	Input    map[string]any  `yaml:"input,omitempty"`
@@ -61,7 +63,7 @@ type Task struct {
 	Model    string          `yaml:"model,omitempty"`
 	Outcomes []string        `yaml:"outcomes,omitempty"`
 	Uses     []string        `yaml:"uses,omitempty"`
-	Body     string          `yaml:"body"`
+	Body     string          `yaml:"body,omitempty"`
 }
 
 type MCPServer struct {
@@ -83,7 +85,7 @@ func Unmarshal(data []byte) (*Workflow, error) {
 }
 
 func Marshal(wf *Workflow) ([]byte, error) {
-	return yaml.MarshalWithOptions(wf, yaml.UseLiteralStyleIfMultiline(true))
+	return yaml.MarshalWithOptions(wf, yaml.UseLiteralStyleIfMultiline(true), yaml.IndentSequence(true))
 }
 
 func (t *Transition) UnmarshalYAML(data []byte) error {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"text/tabwriter"
 
@@ -24,10 +25,13 @@ func lsCmd() *cobra.Command {
 				return err
 			}
 			fmt.Println(formatListing(c))
+			if warnings := formatSkipped(c); warnings != "" {
+				fmt.Fprintln(os.Stderr, warnings)
+			}
 			return nil
 		},
 	}
-	cmd.Flags().Bool("global", false, "act on ~/.awf")
+	cmd.Flags().Bool("global", false, "act on the global store: $AWF_HOME, or ~/.awf when unset")
 	cmd.Flags().BoolP("wf", "w", false, "list workflows only")
 	cmd.Flags().BoolP("task", "t", false, "list tasks only")
 	return cmd
@@ -92,17 +96,17 @@ func formatListing(c contents) string {
 	if b.Len() > 0 {
 		out = c.dir + "\n" + strings.TrimRight(b.String(), "\n")
 	}
-	return out + formatSkipped(c)
+	return out
 }
 
 func formatSkipped(c contents) string {
-	var b strings.Builder
+	var lines []string
 	for _, kind := range c.kinds {
 		for _, sk := range c.listings[kind].skipped {
-			fmt.Fprintf(&b, "\nwarning: %s", sk)
+			lines = append(lines, "warning: "+sk.String())
 		}
 	}
-	return b.String()
+	return strings.Join(lines, "\n")
 }
 
 func versions(d store.Document) string {

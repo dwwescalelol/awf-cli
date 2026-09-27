@@ -22,13 +22,13 @@ func newCmd() *cobra.Command {
 			return fmt.Errorf("%q: %w", args[0], errUnknownKind)
 		},
 	}
-	cmd.PersistentFlags().Bool("global", false, "act on ~/.awf")
+	cmd.PersistentFlags().Bool("global", false, "act on the global store: $AWF_HOME, or ~/.awf when unset")
 	cmd.PersistentFlags().String("version", "", "version to write, defaults to the next minor")
 	cmd.AddCommand(newWorkflowCmd(), newTaskCmd())
 	return cmd
 }
 
-var errUnknownKind = errors.New("uknown document kind, must be one of [task, workflow]")
+var errUnknownKind = errors.New("unknown document kind, must be one of [task, workflow]")
 
 func newWorkflowCmd() *cobra.Command {
 	return &cobra.Command{

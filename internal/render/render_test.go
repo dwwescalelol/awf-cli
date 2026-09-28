@@ -27,7 +27,7 @@ func renderBranchy(t *testing.T) string {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err := Workflow(&out, path, source, doc, w); err != nil {
+	if err := Workflow(&out, path, source, doc, w, nil); err != nil {
 		t.Fatal(err)
 	}
 	return out.String()

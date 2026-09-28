@@ -59,7 +59,13 @@ code, pre, .id { font-family: var(--mono); }
   padding: 10px 24px; border-bottom: 1px solid var(--rule);
   color: var(--muted); font-size: 13px;
 }
-.bar > span:first-child { flex: none; }
+.bar { align-items: center; }
+.bar > span:first-child, .bar .switch { flex: none; }
+.switch select {
+  font: 500 13.5px var(--mono); color: var(--ink); background: var(--surface);
+  border: 1px solid var(--rule); border-radius: 6px; padding: 5px 8px; max-width: 60vw; cursor: pointer;
+}
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .bar .path { font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
 
 header.doc { padding: 36px 24px 28px; max-width: 1280px; margin: 0 auto; }
@@ -205,7 +211,10 @@ footer { color: var(--muted); font-size: 12.5px; text-align: center; padding: 0 
 </style>
 </head>
 <body>
-<div class="bar"><span>awf render</span><span class="path" title="{{.Path}}"><bdi>{{.Path}}</bdi></span></div>
+<div class="bar">
+  {{if .Scope}}<label class="switch"><span class="visually-hidden">Workflow</span><select onchange="location.href = this.value">{{range .Scope}}<option value="{{.URL}}"{{if .Current}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>{{else}}<span>awf render</span>{{end}}
+  <span class="path" title="{{.Path}}"><bdi>{{.Path}}</bdi></span>
+</div>
 
 <header class="doc">
   <div class="title">

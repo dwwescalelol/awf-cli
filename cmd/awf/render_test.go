@@ -16,7 +16,7 @@ func TestRenderStored(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if err := renderPage(&out, wf.path); err != nil {
+	if err := renderPage(&out, wf.path, nil); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(out.String(), "<h1>deploy</h1>") || !strings.Contains(out.String(), `class="fsm"`) {

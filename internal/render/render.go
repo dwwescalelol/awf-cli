@@ -39,6 +39,14 @@ type Page struct {
 	Warnings []string
 	Source   string
 	CLI      string
+	Scope    []Link
+}
+
+// Link is one workflow version in scope, listed so the page can switch to it.
+type Link struct {
+	Label   string
+	URL     string
+	Current bool
 }
 
 type Task struct {
@@ -74,7 +82,7 @@ type Server struct {
 
 // Workflow writes the page for a compiled workflow. doc supplies the fields
 // compiling drops, such as each sha, and source is the file as written.
-func Workflow(out io.Writer, path string, source []byte, doc *manifest.Workflow, w *awf.Workflow) error {
+func Workflow(out io.Writer, path string, source []byte, doc *manifest.Workflow, w *awf.Workflow, scope []Link) error {
 	p := Page{
 		Name:    w.Name,
 		Version: versionString(w.Version),
@@ -85,6 +93,7 @@ func Workflow(out io.Writer, path string, source []byte, doc *manifest.Workflow,
 		Graph:   SVG(w),
 		Source:  string(source),
 		CLI:     version.CLI,
+		Scope:   scope,
 	}
 	if w.Start != nil {
 		p.Start = w.Start.Task.Name

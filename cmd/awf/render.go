@@ -9,11 +9,13 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"slices"
 
 	"github.com/dwwescalelol/awf-cli/internal/load"
 	"github.com/dwwescalelol/awf-cli/internal/manifest"
 	"github.com/dwwescalelol/awf-cli/internal/render"
 	"github.com/dwwescalelol/awf-cli/internal/store"
+	"github.com/dwwescalelol/awf-cli/internal/version"
 	"github.com/spf13/cobra"
 )
 
@@ -31,21 +33,21 @@ func renderCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			path, _, err := locate(scope, store.Workflow, args[0])
+			path, at, err := locate(scope, store.Workflow, args[0])
 			if err != nil {
 				return err
 			}
-			if err := renderPage(io.Discard, path); err != nil {
+			if err := renderPage(io.Discard, path, nil); err != nil {
 				return err
 			}
-			return serve(path)
+			return serve(scope, at)
 		},
 	}
 	cmd.Flags().Bool("global", false, "act on the global store: $AWF_HOME, or ~/.awf when unset")
 	return cmd
 }
 
-func renderPage(w io.Writer, path string) error {
+func renderPage(w io.Writer, path string, scope []render.Link) error {
 	source, err := os.ReadFile(path)
 	if err != nil {
 		return err
@@ -58,17 +60,64 @@ func renderPage(w io.Writer, path string) error {
 	if err != nil {
 		return err
 	}
-	return render.Workflow(w, path, source, doc, compiled)
+	return render.Workflow(w, path, source, doc, compiled, scope)
 }
 
-// serve re-renders the workflow on every request, so a reload shows the
-// latest edit, or why the edit stopped it rendering.
-func serve(path string) error {
-	http.HandleFunc("GET /{$}", func(w http.ResponseWriter, _ *http.Request) {
+func workflowURL(id store.ID, v version.Version) string {
+	return "/wf/" + id.String() + "/" + v.String()
+}
+
+// links lists every workflow version in scope, newest version of each id
+// first, marking the one on the page.
+func links(s *store.Store, current stored) ([]render.Link, error) {
+	documents, _, err := s.List(store.Workflow)
+	if err != nil {
+		return nil, err
+	}
+	var out []render.Link
+	for _, d := range documents {
+		for _, v := range slices.Backward(d.Versions) {
+			out = append(out, render.Link{
+				Label:   d.ID.String() + " " + v.String(),
+				URL:     workflowURL(d.ID, v),
+				Current: d.ID == current.id && v.Compare(current.version) == 0,
+			})
+		}
+	}
+	return out, nil
+}
+
+// serve re-renders on every request, so a reload shows the latest edit, or
+// why the edit stopped the workflow rendering.
+func serve(s *store.Store, first *stored) error {
+	http.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, workflowURL(first.id, first.version), http.StatusFound)
+	})
+	http.HandleFunc("GET /wf/{id}/{version}", func(w http.ResponseWriter, r *http.Request) {
+		id, err := store.NewID(r.PathValue("id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		v, err := version.Parse(r.PathValue("version"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		path, err := s.Find(store.Workflow, id, v)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-store")
 		var buf bytes.Buffer
-		if err := renderPage(&buf, path); err != nil {
+		scope, err := links(s, stored{id: id, version: v})
+		if err == nil {
+			err = renderPage(&buf, path, scope)
+		}
+		if err != nil {
 			w.WriteHeader(http.StatusUnprocessableEntity)
 			fmt.Fprint(w, errorPage(path, err))
 			return
@@ -77,7 +126,7 @@ func serve(path string) error {
 	})
 
 	url := "http://" + renderAddr + "/"
-	fmt.Printf("%s\n%s\n", path, url)
+	fmt.Printf("%s\n%s\n", s.Dir(), url)
 	go browse(url)
 	return http.ListenAndServe(renderAddr, nil)
 }

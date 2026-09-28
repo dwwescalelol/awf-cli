@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,7 +39,7 @@ func TestBundle(t *testing.T) {
 	if _, _, err := validate([]string{"deploy"}, "", false, false); err != nil {
 		t.Fatalf("validate with refs: %v", err)
 	}
-	out, err := bundle([]string{"deploy"}, "", false)
+	out, err := bundle([]string{"deploy"}, "", "", false)
 	if err != nil {
 		t.Fatalf("bundle: %v", err)
 	}
@@ -61,5 +62,53 @@ func TestBundle(t *testing.T) {
 	}
 	if _, _, err := validate(nil, bundled, false, false); err != nil {
 		t.Errorf("bundled output does not validate: %v", err)
+	}
+}
+
+func TestBundleOut(t *testing.T) {
+	root := project(t)
+	wf, err := create(store.Workflow, "deploy", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	loose := filepath.Join(root, "loose.yaml")
+	data, err := os.ReadFile(wf.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(loose, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name string
+		args []string
+		file string
+		out  string
+		want error
+	}{
+		{name: "stored input", args: []string{"deploy"}, out: wf.path, want: errOutIsInput},
+		{name: "file input", file: loose, out: loose, want: errOutIsInput},
+		{name: "into store", file: loose, out: filepath.Join(root, ".awf", "wf", "deploy", "0.2.0.yaml"), want: errOutInStore},
+		{name: "outside", args: []string{"deploy"}, out: filepath.Join(root, "out.yaml")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := bundle(tt.args, tt.file, tt.out, false); !errors.Is(err, tt.want) {
+				t.Errorf("got %v, want %v", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestBundleRejectsInvalidGraph(t *testing.T) {
+	root := project(t)
+	path := filepath.Join(root, "wf.yaml")
+	doc := "openawf: 0.1.0\nname: wf\nsha: null\nstart: a\norchestration:\n  a: ghost\ntasks:\n  a:\n    body: a\n"
+	if err := os.WriteFile(path, []byte(doc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := bundle(nil, path, "", false); err == nil {
+		t.Error("edge to an undefined task: got no error")
 	}
 }

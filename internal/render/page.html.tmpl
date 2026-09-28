@@ -224,7 +224,7 @@ footer { color: var(--muted); font-size: 12.5px; text-align: center; padding: 0 
   </div>
   {{with .Summary}}<p class="summary">{{.}}</p>{{end}}
   <dl class="meta">
-    {{with .Model}}<div><dt>Model</dt><dd>{{.}}</dd></div>{{end}}
+    {{with .Model}}<div><dt>Default model</dt><dd>{{.}}</dd></div>{{end}}
     {{with .Start}}<div><dt>Starts at</dt><dd><a href="#task-{{.}}">{{.}}</a></dd></div>{{end}}
     <div><dt>Sha</dt><dd>{{if .SHA}}{{.SHA}}{{else}}unsealed{{end}}</dd></div>
   </dl>

@@ -53,3 +53,13 @@ func TestUnresolvedRef(t *testing.T) {
 		})
 	}
 }
+
+func TestUnresolvedRefEdges(t *testing.T) {
+	_, err := Workflow(filepath.Join("testdata", "branchref.yaml"), nil)
+	if !errors.Is(err, ErrUnresolvedRef) || !errors.Is(err, ErrNotATask) {
+		t.Errorf("got %v, want the $ref and the undefined edge target", err)
+	}
+	if errors.Is(err, ErrNoOutcomes) {
+		t.Errorf("got %v, want no outcome check on an unresolved task", err)
+	}
+}

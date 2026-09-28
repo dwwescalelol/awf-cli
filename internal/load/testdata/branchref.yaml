@@ -1,0 +1,14 @@
+openawf: 0.1.0
+name: feat-dev
+sha: null
+start: review
+orchestration:
+  review:
+    ok: done
+    fail: ghost
+  done: null
+tasks:
+  review:
+    $ref: ./absent.md
+  done:
+    body: done

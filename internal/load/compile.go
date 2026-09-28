@@ -33,7 +33,8 @@ func compile(doc *manifest.Workflow) (*awf.Workflow, error) {
 			errs = append(errs, fmt.Errorf("orchestration/%s: %w", name, ErrNotATask))
 			continue
 		}
-		out, e := edges(name, doc.Orchestration[name], states)
+		unresolved := doc.Tasks[name].Task == nil
+		out, e := edges(name, doc.Orchestration[name], states, unresolved)
 		state.Out, errs = out, append(errs, e...)
 	}
 
@@ -114,12 +115,16 @@ func task(name string, doc *manifest.Task, model string, servers map[string]*awf
 
 // edges binds a transition to the states it leaves for. A task that emits
 // outcomes branches on all of them; one that emits none ends the flow or takes
-// a single edge.
-func edges(name string, node manifest.Transition, states map[string]*awf.State) ([]awf.Edge, []error) {
+// a single edge. An unresolved task's outcomes are unknown, so only its targets
+// bind.
+func edges(name string, node manifest.Transition, states map[string]*awf.State, unresolved bool) ([]awf.Edge, []error) {
 	path := "orchestration/" + name
 	outcomes := states[name].Task.Outcomes
 
 	switch {
+	case unresolved:
+		return targets(path, node, states)
+
 	case node.Edge == nil && node.Branch == nil:
 		if len(outcomes) > 0 {
 			return nil, []error{fmt.Errorf("%s: %w on %q", path, ErrMustBranch, outcomes)}
@@ -152,6 +157,20 @@ func edges(name string, node manifest.Transition, states map[string]*awf.State) 
 		if _, ok := node.Branch[string(on)]; !ok {
 			errs = append(errs, fmt.Errorf("%s/%s: %w", path, on, ErrNoEdge))
 		}
+	}
+	return out, errs
+}
+
+func targets(path string, node manifest.Transition, states map[string]*awf.State) ([]awf.Edge, []error) {
+	if node.Edge != nil {
+		e, errs := edge(path, "", *node.Edge, states)
+		return []awf.Edge{e}, errs
+	}
+	var errs []error
+	out := make([]awf.Edge, 0, len(node.Branch))
+	for _, on := range sorted(node.Branch) {
+		e, err := edge(path+"/"+on, awf.Outcome(on), node.Branch[on], states)
+		out, errs = append(out, e), append(errs, err...)
 	}
 	return out, errs
 }

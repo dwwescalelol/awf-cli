@@ -1,0 +1,59 @@
+openawf: 0.1.0
+name: triage-loop
+summary: Classify an incident, fix or escalate it, and report.
+model: claude-sonnet-5
+version: 1.2.0
+sha: null
+start: intake
+orchestration:
+  intake:
+    bug: reproduce
+    question: answer
+    noise: report
+  reproduce:
+    ok: fix
+    flaky:
+      task: reproduce
+      retries: 3
+  fix:
+    pass: report
+    fail:
+      task: reproduce
+      session: resume
+  answer: report
+  report: null
+  orphan: report
+tasks:
+  intake:
+    summary: Read the incident and decide what kind it is.
+    outcomes: [bug, question, noise]
+    uses: [tracker]
+    body: |
+      # Intake
+
+      | kind | meaning |
+      |---|---|
+      | bug | something broke |
+      | question | a user needs help |
+
+      <script>alert(1)</script>
+  reproduce:
+    outcomes: [ok, flaky]
+    body: Reproduce it.
+  fix:
+    model: claude-opus-5-5
+    outcomes: [pass, fail]
+    output:
+      diff: string
+    body: Fix it.
+  answer:
+    body: Answer it.
+  report:
+    uses: [tracker]
+    body: Report it.
+  orphan:
+    body: Never runs.
+mcp:
+  tracker:
+    transport: http
+    tools: [create_issue, comment]

@@ -16,6 +16,7 @@ func TestParse(t *testing.T) {
 	}{
 		{in: "./diff.md", want: Ref{Path: "./diff.md"}},
 		{in: "diff.md", want: Ref{Path: "diff.md"}},
+		{in: "DIFF.MD", want: Ref{Path: "DIFF.MD"}},
 		{in: "tasks/diff", want: Ref{Path: "tasks/diff"}},
 		{in: "diff@1.2.3", want: Ref{ID: "diff", Version: version.Version{Major: 1, Minor: 2, Patch: 3}}},
 	}

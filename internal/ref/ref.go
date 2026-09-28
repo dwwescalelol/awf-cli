@@ -29,7 +29,7 @@ func Parse(s string) (Ref, error) {
 	if strings.Contains(s, "://") {
 		return Ref{}, fmt.Errorf("%q: %w", s, ErrRemote)
 	}
-	if strings.ContainsAny(s, `/\`) || strings.HasSuffix(s, ".md") {
+	if strings.ContainsAny(s, `/\`) || strings.EqualFold(filepath.Ext(s), ".md") {
 		return Ref{Path: s}, nil
 	}
 	name, pin, pinned := strings.Cut(s, "@")

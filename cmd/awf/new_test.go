@@ -33,7 +33,7 @@ func TestCreateWorkflow(t *testing.T) {
 	if filepath.Base(first) != "0.1.0.yaml" {
 		t.Errorf("first: got %s, want 0.1.0.yaml", first)
 	}
-	if _, err := load.Workflow(first); err != nil {
+	if _, err := load.Workflow(first, nil); err != nil {
 		t.Errorf("blank workflow does not load: %v", err)
 	}
 

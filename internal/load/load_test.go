@@ -10,7 +10,7 @@ import (
 )
 
 func TestWorkflow(t *testing.T) {
-	w, err := Workflow(filepath.Join("testdata", "valid.yaml"))
+	w, err := Workflow(filepath.Join("testdata", "valid.yaml"), nil)
 	if err != nil {
 		t.Fatalf("Workflow: %v", err)
 	}
@@ -35,7 +35,7 @@ func TestWorkflowErrors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.file, func(t *testing.T) {
-			_, err := Workflow(filepath.Join("testdata", tt.file))
+			_, err := Workflow(filepath.Join("testdata", tt.file), nil)
 			for _, want := range tt.want {
 				if !errors.Is(err, want) {
 					t.Errorf("got %v, want %v", err, want)
@@ -46,13 +46,13 @@ func TestWorkflowErrors(t *testing.T) {
 }
 
 func TestWorkflowSchema(t *testing.T) {
-	if _, err := Workflow(filepath.Join("testdata", "schema.yaml")); err == nil {
+	if _, err := Workflow(filepath.Join("testdata", "schema.yaml"), nil); err == nil {
 		t.Fatal("missing start: got no error")
 	}
 }
 
 func TestWorkflowMissingFile(t *testing.T) {
-	if _, err := Workflow(filepath.Join("testdata", "absent.yaml")); err == nil {
+	if _, err := Workflow(filepath.Join("testdata", "absent.yaml"), nil); err == nil {
 		t.Fatal("got no error")
 	}
 }

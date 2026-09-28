@@ -1,11 +1,14 @@
 package load
 
 import (
+	"errors"
 	"os"
+	"path/filepath"
 
 	"github.com/dwwescalelol/awf-cli/internal/awf"
 	"github.com/dwwescalelol/awf-cli/internal/manifest"
 	"github.com/dwwescalelol/awf-cli/internal/schema"
+	"github.com/dwwescalelol/awf-cli/internal/store"
 )
 
 func Task(path string) (*manifest.Task, error) {
@@ -23,7 +26,22 @@ func Task(path string) (*manifest.Task, error) {
 	return manifest.UnmarshalTask(data)
 }
 
-func Workflow(path string) (*awf.Workflow, error) {
+// Workflow reads a workflow, inlines its $ref tasks and compiles it. Relative
+// $ref paths resolve against the workflow's directory, and ids resolve in s.
+func Workflow(path string, s *store.Store) (*awf.Workflow, error) {
+	doc, err := read(path)
+	if err != nil {
+		return nil, err
+	}
+	unresolved := bundle(doc, filepath.Dir(path), s)
+	w, err := compile(doc)
+	if err := errors.Join(unresolved, err); err != nil {
+		return nil, err
+	}
+	return w, nil
+}
+
+func read(path string) (*manifest.Workflow, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -31,9 +49,5 @@ func Workflow(path string) (*awf.Workflow, error) {
 	if _, err := schema.Validate(data); err != nil {
 		return nil, err
 	}
-	doc, err := manifest.Unmarshal(data)
-	if err != nil {
-		return nil, err
-	}
-	return compile(doc)
+	return manifest.Unmarshal(data)
 }

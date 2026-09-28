@@ -66,7 +66,11 @@ func validate(args []string, file string, task, global bool) (string, []error, e
 	if task || strings.HasSuffix(file, ".md") {
 		kind = store.Task
 	}
-	path, at, err := target(kind, args, file, global)
+	scope, err := store.Resolve(global)
+	if err != nil {
+		return "", nil, err
+	}
+	path, at, err := target(scope, kind, args, file)
 	if err != nil {
 		return "", nil, err
 	}
@@ -77,7 +81,7 @@ func validate(args []string, file string, task, global bool) (string, []error, e
 		}
 		return path, nil, at.check("", t.Version)
 	}
-	w, err := load.Workflow(path)
+	w, err := load.Workflow(path, scope)
 	if err != nil {
 		return path, nil, err
 	}
@@ -98,7 +102,7 @@ func (at *stored) check(name string, v version.Version) error {
 	return errors.Join(errs...)
 }
 
-func target(kind store.DocumentKind, args []string, file string, global bool) (string, *stored, error) {
+func target(scope *store.Store, kind store.DocumentKind, args []string, file string) (string, *stored, error) {
 	if file == "" && len(args) == 0 {
 		return "", nil, errors.New("give an id or -f")
 	}
@@ -107,11 +111,6 @@ func target(kind store.DocumentKind, args []string, file string, global bool) (s
 	}
 	if file != "" {
 		return file, nil, nil
-	}
-
-	scope, err := store.Resolve(global)
-	if err != nil {
-		return "", nil, err
 	}
 	return locate(scope, kind, args[0])
 }

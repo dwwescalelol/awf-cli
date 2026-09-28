@@ -11,14 +11,13 @@ import (
 )
 
 var (
-	ErrNotATask      = errors.New("not a defined task")
-	ErrNoNode        = errors.New("no orchestration node")
-	ErrUnresolvedRef = errors.New("unresolved $ref")
-	ErrNotDeclared   = errors.New("not declared in mcp")
-	ErrMustBranch    = errors.New("must branch")
-	ErrNoOutcomes    = errors.New("task emits no outcomes")
-	ErrNotAnOutcome  = errors.New("not an outcome")
-	ErrNoEdge        = errors.New("no edge")
+	ErrNotATask     = errors.New("not a defined task")
+	ErrNoNode       = errors.New("no orchestration node")
+	ErrNotDeclared  = errors.New("not declared in mcp")
+	ErrMustBranch   = errors.New("must branch")
+	ErrNoOutcomes   = errors.New("task emits no outcomes")
+	ErrNotAnOutcome = errors.New("not an outcome")
+	ErrNoEdge       = errors.New("no edge")
 )
 
 // compile lowers a document into the machine it describes, binding every name
@@ -69,8 +68,7 @@ func states(doc *manifest.Workflow, servers map[string]*awf.MCPServer) (map[stri
 			errs = append(errs, fmt.Errorf("tasks/%s: %w", name, ErrNoNode))
 		}
 		if entry.Task == nil {
-			// An edge to this task still binds, so the $ref is reported once.
-			errs = append(errs, fmt.Errorf("tasks/%s: %w %q", name, ErrUnresolvedRef, entry.Ref))
+			// bundle reported the $ref. A placeholder lets edges to it still bind.
 			out[name] = &awf.State{Task: &awf.Task{Name: name}}
 			continue
 		}

@@ -87,7 +87,6 @@ dl.meta dd { margin: 2px 0 0; font-family: var(--mono); overflow-wrap: anywhere;
   display: grid; grid-template-columns: minmax(280px, max-content) minmax(0, 1fr);
   gap: 28px; max-width: 1280px; margin: 0 auto; padding: 0 24px 64px; align-items: start;
 }
-.layout.single { grid-template-columns: minmax(0, 1fr); max-width: 920px; }
 
 aside.graph {
   position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto;
@@ -216,7 +215,6 @@ footer { color: var(--muted); font-size: 12.5px; text-align: center; padding: 0 
   </div>
   {{with .Summary}}<p class="summary">{{.}}</p>{{end}}
   <dl class="meta">
-    <div><dt>Kind</dt><dd>{{.Kind}}</dd></div>
     {{with .Model}}<div><dt>Model</dt><dd>{{.}}</dd></div>{{end}}
     {{with .Start}}<div><dt>Starts at</dt><dd><a href="#task-{{.}}">{{.}}</a></dd></div>{{end}}
     <div><dt>Sha</dt><dd>{{if .SHA}}{{.SHA}}{{else}}unsealed{{end}}</dd></div>
@@ -224,8 +222,7 @@ footer { color: var(--muted); font-size: 12.5px; text-align: center; padding: 0 
   {{with .Warnings}}<ul class="warnings" aria-label="Warnings">{{range .}}<li>{{.}}</li>{{end}}</ul>{{end}}
 </header>
 
-<div class="layout{{if not .Graph}} single{{end}}">
-  {{if .Graph}}
+<div class="layout">
   <aside class="graph" aria-label="Orchestration">
     <div class="legend">
       <span><svg width="10" height="10" aria-hidden="true"><circle cx="5" cy="5" r="4" fill="currentColor"/></svg>start</span>
@@ -234,12 +231,11 @@ footer { color: var(--muted); font-size: 12.5px; text-align: center; padding: 0 
     </div>
     {{.Graph}}
   </aside>
-  {{end}}
 
   <main>
     <section>
       <div class="section-head">
-        <h2>{{if eq .Kind "workflow"}}Tasks<span class="count">{{len .Tasks}}</span>{{else}}Task{{end}}</h2>
+        <h2>Tasks<span class="count">{{len .Tasks}}</span></h2>
         {{if gt (len .Tasks) 1}}<button class="toggle" type="button" data-collapse>Collapse all</button>{{end}}
       </div>
       <div class="tasks">
@@ -250,14 +246,13 @@ footer { color: var(--muted); font-size: 12.5px; text-align: center; padding: 0 
             <span class="brief">{{.Summary}}</span>
             <span class="tags">
               {{if .Start}}<span class="tag start">start</span>{{end}}
-              {{if and .Terminal $.Graph}}<span class="tag end">end</span>{{end}}
+              {{if .Terminal}}<span class="tag end">end</span>{{end}}
               {{if .Unreachable}}<span class="tag warn">unreachable</span>{{end}}
             </span>
           </summary>
           <div class="task-body">
             <dl class="facts">
               {{with .Model}}<dt>Model</dt><dd><code>{{.}}</code></dd>{{end}}
-              {{if $.Graph}}
               <dt>Next</dt>
               <dd>
                 {{if .Next}}
@@ -268,9 +263,6 @@ footer { color: var(--muted); font-size: 12.5px; text-align: center; padding: 0 
                 </ul>
                 {{else}}Ends the run{{end}}
               </dd>
-              {{else}}
-              {{with .Outcomes}}<dt>Outcomes</dt><dd class="chips">{{range .}}<code class="chip">{{.}}</code>{{end}}</dd>{{end}}
-              {{end}}
               {{with .Uses}}<dt>MCP</dt><dd class="chips">{{range .}}<a class="chip" href="#mcp-{{.}}">{{.}}</a>{{end}}</dd>{{end}}
               {{with .SHA}}<dt>Sha</dt><dd><code>{{.}}</code></dd>{{end}}
             </dl>

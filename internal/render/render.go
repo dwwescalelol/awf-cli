@@ -1,4 +1,4 @@
-// Package render draws an OpenAWF document as a self-contained HTML page.
+// Package render draws an OpenAWF workflow as a self-contained HTML page.
 package render
 
 import (
@@ -26,7 +26,6 @@ var page = template.Must(template.New("page").Parse(pageTemplate))
 var markdown = goldmark.New(goldmark.WithExtensions(extension.GFM))
 
 type Page struct {
-	Kind     string
 	Name     string
 	Version  string
 	Summary  string
@@ -77,7 +76,6 @@ type Server struct {
 // compiling drops, such as each sha, and source is the file as written.
 func Workflow(out io.Writer, path string, source []byte, doc *manifest.Workflow, w *awf.Workflow) error {
 	p := Page{
-		Kind:    "workflow",
 		Name:    w.Name,
 		Version: versionString(w.Version),
 		Summary: w.Summary,
@@ -123,40 +121,6 @@ func Workflow(out io.Writer, path string, source []byte, doc *manifest.Workflow,
 		p.Servers = append(p.Servers, s)
 	}
 	return execute(out, p)
-}
-
-// TaskPage writes the page for a standalone task file.
-func TaskPage(out io.Writer, path, name string, source []byte, doc *manifest.Task) error {
-	outcomes := make([]awf.Outcome, 0, len(doc.Outcomes))
-	for _, o := range doc.Outcomes {
-		outcomes = append(outcomes, awf.Outcome(o))
-	}
-	t, err := task(&awf.Task{
-		Name:     name,
-		Version:  doc.Version,
-		Summary:  doc.Summary,
-		Model:    doc.Model,
-		Input:    doc.Input,
-		Output:   doc.Output,
-		Outcomes: outcomes,
-		Body:     doc.Body,
-	}, doc)
-	if err != nil {
-		return err
-	}
-	t.Uses = doc.Uses
-	return execute(out, Page{
-		Kind:    "task",
-		Name:    name,
-		Version: t.Version,
-		Summary: doc.Summary,
-		Model:   doc.Model,
-		SHA:     sha(doc.SHA),
-		Path:    path,
-		Tasks:   []Task{t},
-		Source:  string(source),
-		CLI:     version.CLI,
-	})
 }
 
 func execute(out io.Writer, p Page) error {

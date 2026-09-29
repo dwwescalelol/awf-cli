@@ -22,6 +22,9 @@ const (
 	laneGap   = 22
 	labelChar = 7.0
 	corner    = 8
+	loopR     = 10
+	loopLead  = 10
+	loopInset = 24
 )
 
 type node struct {
@@ -285,18 +288,17 @@ func SVG(w *awf.Workflow) template.HTML {
 	}
 
 	for i, a := range l.arcs {
-		cls := edgeClass(a)
+		cls := "edge"
 		from, to := esc(a.from.state.Task.Name), esc(a.to.state.Task.Name)
 
 		if a.from == a.to {
-			// The loop sits on whichever side of the node has no neighbour.
-			x, y, side := a.from.right(), a.from.y, 1.0
-			if a.from.pos == 0 && !l.rightmost(a.from) {
-				x, side = a.from.x, -1
-			}
-			fmt.Fprintf(&b, `<path class="%s" data-from="%s" data-to="%s" d="M%.1f,%.1f C%.1f,%.1f %.1f,%.1f %.1f,%.1f" marker-end="url(#arrow)"/>`,
-				cls, from, to, x-22*side, y, x-22*side, y-30, x+30*side, y+nodeH/2, x+side, y+nodeH/2)
-			grow(label(&labels, a.edge, x+12*side, y-12, side < 0))
+			// A circle on the top edge near the left corner, clear of the
+			// edges that enter at the top centre and the lanes at the sides.
+			x, y := a.from.x+loopInset, a.from.y
+			top := y - loopLead
+			fmt.Fprintf(&b, `<path class="%s" data-from="%s" data-to="%s" d="M%.1f,%.1f V%.1f A%d,%d 0 0 0 %.1f,%.1f V%.1f" marker-end="url(#arrow)"/>`,
+				cls, from, to, x+loopR, y, top, loopR, loopR, x-loopR, top, y-1)
+			grow(label(&labels, a.edge, x-loopR-6, top-loopR/2, true))
 			continue
 		}
 
@@ -369,14 +371,6 @@ func SVG(w *awf.Workflow) template.HTML {
 
 func (l *layered) rightmost(n *node) bool {
 	return n.pos == len(l.ranks[n.rank])-1
-}
-
-func edgeClass(a arc) string {
-	cls := "edge"
-	if a.back {
-		cls += " back"
-	}
-	return cls
 }
 
 // spread offsets the i-th of n edges sharing a node side so they fan out.

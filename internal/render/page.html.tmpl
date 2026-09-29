@@ -20,6 +20,8 @@
   --dot: #cfd5de;
   --warn: #8a5300;
   --warn-soft: #fff2d9;
+  --bad: #b3261e;
+  --bad-soft: #fdecea;
   --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   color-scheme: light;
@@ -39,6 +41,8 @@
     --dot: #242c36;
     --warn: #f1b85a;
     --warn-soft: #2f2412;
+    --bad: #ff8a80;
+    --bad-soft: #3a1714;
     color-scheme: dark;
   }
 }
@@ -54,19 +58,42 @@ a { color: var(--accent); }
 code, pre, .id { font-family: var(--mono); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 
-.bar {
-  display: flex; justify-content: space-between; gap: 16px;
-  padding: 10px 24px; border-bottom: 1px solid var(--rule);
-  color: var(--muted); font-size: 13px;
+.bar { border-bottom: 1px solid var(--rule); color: var(--muted); font-size: 13px; }
+.bar-inner {
+  display: flex; justify-content: space-between; align-items: center; gap: 16px;
+  max-width: 1280px; margin: 0 auto; padding: 10px 24px;
 }
-.bar { align-items: center; }
-.bar > span:first-child, .bar .switch { flex: none; }
-.switch select {
-  font: 500 13.5px var(--mono); color: var(--ink); background: var(--surface);
-  border: 1px solid var(--rule); border-radius: 6px; padding: 5px 8px; max-width: 60vw; cursor: pointer;
+.switches { display: flex; align-items: center; gap: 8px; flex: none; }
+.switches .static, .menu > summary {
+  display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px;
+  font: 500 13.5px var(--mono); color: var(--ink); border: 1px solid transparent; border-radius: 8px;
 }
-.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.bar .path { font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+.menu { position: relative; }
+.menu > summary { list-style: none; cursor: pointer; border-color: var(--rule); background: var(--surface); }
+.menu > summary::-webkit-details-marker { display: none; }
+.menu > summary::after {
+  content: ""; width: 6px; height: 6px; margin: -3px 0 0 2px;
+  border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(45deg);
+}
+.menu > summary:hover, .menu[open] > summary { border-color: var(--accent); }
+.count { font: 600 11.5px var(--sans); color: var(--muted); background: var(--sunken); border-radius: 999px; padding: 1px 7px; }
+.menu-list {
+  position: absolute; z-index: 10; top: calc(100% + 6px); left: 0; min-width: 240px; max-height: 60vh; overflow: auto;
+  padding: 4px; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px;
+  box-shadow: 0 12px 32px -12px rgba(15, 23, 42, .28);
+}
+.menu-list a {
+  display: flex; justify-content: space-between; align-items: center; gap: 16px;
+  padding: 7px 10px; border-radius: 6px; color: var(--ink); text-decoration: none; font: 13.5px var(--mono);
+}
+.menu-list a:hover, .menu-list a:focus-visible { background: var(--sunken); outline: none; }
+.menu-list a[aria-current] { color: var(--accent); font-weight: 600; }
+.menu-list .entry { display: inline-flex; align-items: baseline; gap: 10px; }
+.menu-list .pill { font-size: 11.5px; padding: 3px 7px; }
+.menu-list .note { font: 12px var(--sans); color: var(--muted); font-weight: 400; }
+.bar .scope { display: flex; gap: 8px; min-width: 0; }
+.bar .scope-label { flex: none; }
+.bar .path { color: var(--ink-2); font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
 
 header.doc { padding: 36px 24px 28px; max-width: 1280px; margin: 0 auto; }
 .title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 14px; }
@@ -86,9 +113,28 @@ dl.meta { display: flex; flex-wrap: wrap; gap: 8px 32px; margin: 22px 0 0; font-
 dl.meta div { min-width: 0; }
 dl.meta dt { color: var(--muted); }
 dl.meta dd { margin: 2px 0 0; font-family: var(--mono); overflow-wrap: anywhere; }
+.pill.invalid { border-color: transparent; background: var(--bad-soft); color: var(--bad); font: inherit; font-size: 12.5px; font-weight: 600; line-height: 1; cursor: pointer; }
+.menu-list .pill.invalid { cursor: inherit; font-size: 11.5px; }
+.overlay {
+  position: fixed; inset: 0; z-index: 50; display: grid; place-items: start center; overflow: auto;
+  padding: 10vh 16px 32px; background: rgba(8, 11, 16, .62); backdrop-filter: blur(2px);
+}
+.overlay[hidden] { display: none; }
+.overlay-panel {
+  width: min(820px, 100%); background: var(--surface); border: 1px solid var(--rule); border-top: 4px solid var(--bad);
+  border-radius: 12px; padding: 20px 22px; box-shadow: 0 24px 64px -16px rgba(0, 0, 0, .45);
+}
+.overlay-head { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; }
+.overlay-head h2 { margin: 0; color: var(--bad); }
+.overlay-path { margin: 6px 0 14px; font: 13px var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+.overlay-errors { white-space: pre-wrap; color: var(--bad); background: var(--bad-soft); border-color: transparent; font-size: 13px; }
+.overlay-hint { margin: 14px 0 0; font-size: 13.5px; color: var(--muted); }
 .warnings { margin: 20px 0 0; padding: 10px 14px; border-radius: 8px; background: var(--warn-soft); color: var(--warn); font-size: 13.5px; list-style: none; }
 .warnings li { font-family: var(--mono); }
 
+.layout.single { grid-template-columns: minmax(0, 920px); }
+.layout.single details.task > summary { display: none; }
+.layout.single .task-body { padding-top: 18px; padding-left: 18px; }
 .layout {
   display: grid; grid-template-columns: minmax(280px, max-content) minmax(0, 1fr);
   gap: 28px; max-width: 1280px; margin: 0 auto; padding: 0 24px 64px; align-items: start;
@@ -117,7 +163,6 @@ aside.graph .legend svg { flex: none; }
 .fsm .node.current .inner { stroke: var(--accent); }
 .fsm .node.current text { fill: var(--accent); font-weight: 600; }
 .fsm .edge { fill: none; stroke: var(--edge); stroke-width: 1.4; transition: stroke .15s; }
-.fsm .edge.back { stroke-dasharray: 5 4; }
 .fsm .edge.lit { stroke: var(--accent); stroke-width: 1.8; }
 .fsm .arrowhead { fill: var(--edge); }
 .fsm .entry { fill: var(--ink); }
@@ -197,7 +242,8 @@ details.source pre { margin-top: 12px; max-height: 70vh; }
 footer { color: var(--muted); font-size: 12.5px; text-align: center; padding: 0 16px 32px; }
 
 @media (max-width: 860px) {
-  .bar, header.doc { padding-left: 16px; padding-right: 16px; }
+  .bar-inner, header.doc { padding-left: 16px; padding-right: 16px; }
+  .bar .scope-label { display: none; }
   .layout { grid-template-columns: minmax(0, 1fr); padding: 0 16px 48px; gap: 24px; }
   aside.graph { position: static; max-height: none; max-width: none; }
   aside.graph .fsm { margin: 0 auto; }
@@ -211,40 +257,54 @@ footer { color: var(--muted); font-size: 12.5px; text-align: center; padding: 0 
 </style>
 </head>
 <body>
-<div class="bar">
-  {{if .Scope}}<label class="switch"><span class="visually-hidden">Workflow</span><select onchange="location.href = this.value">{{range .Scope}}<option value="{{.URL}}"{{if .Current}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>{{else}}<span>awf render</span>{{end}}
-  <span class="path" title="{{.Path}}"><bdi>{{.Path}}</bdi></span>
-</div>
+{{if .Scope.Dir}}<div class="bar"><div class="bar-inner">
+  {{with .Scope.Workflows}}<nav class="switches" aria-label="Workflows in scope">
+    {{if gt (len .) 1}}
+    <details class="menu">
+      <summary>{{range .}}{{if .Current}}{{.Label}}{{end}}{{end}}<span class="count">{{len .}}</span></summary>
+      <div class="menu-list">{{range .}}<a href="{{.URL}}"{{if .Current}} aria-current="page"{{end}}>{{.Label}}<span class="note">{{.Count}} version{{if ne .Count 1}}s{{end}}</span></a>{{end}}</div>
+    </details>
+    {{else}}{{range .}}<span class="static">{{.Label}}</span>{{end}}{{end}}
+    {{with $.Scope.Versions}}{{if gt (len .) 1}}
+    <details class="menu">
+      <summary>{{range .}}{{if .Current}}{{.Label}}{{end}}{{end}}<span class="count">{{len .}}</span></summary>
+      <div class="menu-list">{{range .}}<a href="{{.URL}}"{{if .Current}} aria-current="page"{{end}}><span class="entry">{{.Label}}{{if .Latest}}<span class="note">latest</span>{{end}}</span>{{if .Invalid}}<span class="pill invalid">Invalid</span>{{else if .Sealed}}<span class="pill sealed">Sealed</span>{{else}}<span class="pill">Draft</span>{{end}}</a>{{end}}</div>
+    </details>
+    {{else}}{{range .}}<span class="static">{{.Label}}</span>{{end}}{{end}}{{end}}
+  </nav>{{end}}
+  {{with .Scope.Dir}}<span class="scope"><span class="scope-label">Scope</span><span class="path" title="{{.}}"><bdi>{{.}}</bdi></span></span>{{end}}
+</div></div>{{end}}
 
 <header class="doc">
   <div class="title">
     <h1>{{.Name}}</h1>
     {{with .Version}}<span class="ver">{{.}}</span>{{end}}
-    {{if .SHA}}<span class="pill sealed" title="{{.SHA}}">Sealed</span>{{else}}<span class="pill">Draft</span>{{end}}
+    {{if .Error}}<button class="pill invalid" type="button" data-overlay-open>Invalid</button>{{else if .SHA}}<span class="pill sealed" title="{{.SHA}}">Sealed</span>{{else}}<span class="pill">Draft</span>{{end}}
   </div>
   {{with .Summary}}<p class="summary">{{.}}</p>{{end}}
   <dl class="meta">
     {{with .Model}}<div><dt>Default model</dt><dd>{{.}}</dd></div>{{end}}
-    {{with .Start}}<div><dt>Starts at</dt><dd><a href="#task-{{.}}">{{.}}</a></dd></div>{{end}}
     <div><dt>Sha</dt><dd>{{if .SHA}}{{.SHA}}{{else}}unsealed{{end}}</dd></div>
   </dl>
   {{with .Warnings}}<ul class="warnings" aria-label="Warnings">{{range .}}<li>{{.}}</li>{{end}}</ul>{{end}}
 </header>
 
-<div class="layout">
+<div class="layout{{if not .Graph}} single{{end}}">
+  {{if .Graph}}
   <aside class="graph" aria-label="Orchestration">
     <div class="legend">
       <span><svg width="10" height="10" aria-hidden="true"><circle cx="5" cy="5" r="4" fill="currentColor"/></svg>start</span>
       <span><svg width="16" height="12" aria-hidden="true"><rect x=".5" y=".5" width="15" height="11" rx="3" fill="none" stroke="currentColor"/><rect x="3" y="3" width="10" height="6" rx="1.5" fill="none" stroke="currentColor"/></svg>ends the run</span>
-      <span><svg width="22" height="10" aria-hidden="true"><path d="M1 5 H21" stroke="currentColor" stroke-dasharray="4 3"/></svg>loops back</span>
     </div>
     {{.Graph}}
   </aside>
+  {{end}}
 
   <main>
+    {{if .Tasks}}
     <section>
       <div class="section-head">
-        <h2>Tasks<span class="count">{{len .Tasks}}</span></h2>
+        {{if .Graph}}<h2>Tasks<span class="count">{{len .Tasks}}</span></h2>{{end}}
         {{if gt (len .Tasks) 1}}<button class="toggle" type="button" data-collapse>Collapse all</button>{{end}}
       </div>
       <div class="tasks">
@@ -262,6 +322,7 @@ footer { color: var(--muted); font-size: 12.5px; text-align: center; padding: 0 
           <div class="task-body">
             <dl class="facts">
               {{with .Model}}<dt>Model</dt><dd><code>{{.}}</code></dd>{{end}}
+              {{if $.Graph}}
               <dt>Next</dt>
               <dd>
                 {{if .Next}}
@@ -272,7 +333,10 @@ footer { color: var(--muted); font-size: 12.5px; text-align: center; padding: 0 
                 </ul>
                 {{else}}Ends the run{{end}}
               </dd>
-              {{with .Uses}}<dt>MCP</dt><dd class="chips">{{range .}}<a class="chip" href="#mcp-{{.}}">{{.}}</a>{{end}}</dd>{{end}}
+              {{else}}
+              {{with .Outcomes}}<dt>Outcomes</dt><dd class="chips">{{range .}}<code class="chip">{{.}}</code>{{end}}</dd>{{end}}
+              {{end}}
+              {{with .Uses}}<dt>MCP</dt><dd class="chips">{{range .}}{{if $.Graph}}<a class="chip" href="#mcp-{{.}}">{{.}}</a>{{else}}<code class="chip">{{.}}</code>{{end}}{{end}}</dd>{{end}}
               {{with .SHA}}<dt>Sha</dt><dd><code>{{.}}</code></dd>{{end}}
             </dl>
             {{if or .Input .Output}}
@@ -287,6 +351,7 @@ footer { color: var(--muted); font-size: 12.5px; text-align: center; padding: 0 
         {{end}}
       </div>
     </section>
+    {{end}}
 
     {{with .Servers}}
     <section>
@@ -315,6 +380,20 @@ footer { color: var(--muted); font-size: 12.5px; text-align: center; padding: 0 
 
 <footer>Rendered by awf {{.CLI}}</footer>
 
+{{with .Error}}
+<div class="overlay" data-overlay role="alertdialog" aria-modal="true" aria-labelledby="overlay-title">
+  <div class="overlay-panel">
+    <div class="overlay-head">
+      <h2 id="overlay-title">Does not validate</h2>
+      <button class="toggle" type="button" data-overlay-close>Dismiss</button>
+    </div>
+    <p class="overlay-path">{{$.Path}}</p>
+    <pre class="overlay-errors">{{.}}</pre>
+    <p class="overlay-hint">{{if $.Live}}Fix the file and this page reloads.{{else}}Fix the file and render it again.{{end}}</p>
+  </div>
+</div>
+{{end}}
+
 <script>
 (() => {
   const nodes = new Map([...document.querySelectorAll('.fsm .node')].map(n => [n.dataset.task, n]));
@@ -326,7 +405,22 @@ footer { color: var(--muted); font-size: 12.5px; text-align: center; padding: 0 
     tasks.forEach(t => t.classList.toggle('current', t.dataset.task === name));
     nodes.forEach((n, key) => n.classList.toggle('current', key === name));
     edges.forEach(e => e.classList.toggle('lit', e.dataset.from === name));
+    follow(nodes.get(name));
   };
+
+  // Keep the current node in view when the diagram is taller than its panel.
+  const panel = document.querySelector('aside.graph');
+  let last = null;
+  function follow(node) {
+    if (!node || !panel || node === last) return;
+    last = node;
+    if (panel.scrollHeight <= panel.clientHeight) return;
+    const box = node.getBoundingClientRect(), view = panel.getBoundingClientRect();
+    const margin = 48;
+    if (box.top >= view.top + margin && box.bottom <= view.bottom - margin) return;
+    const top = panel.scrollTop + box.top - view.top - (panel.clientHeight - box.height) / 2;
+    panel.scrollTo({ top, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  }
 
   nodes.forEach((n, name) => n.addEventListener('click', ev => {
     ev.preventDefault();
@@ -359,6 +453,25 @@ footer { color: var(--muted); font-size: 12.5px; text-align: center; padding: 0 
     spy();
   }
 
+  const menus = [...document.querySelectorAll('details.menu')];
+  menus.forEach(m => m.addEventListener('toggle', () => {
+    if (m.open) menus.forEach(o => { if (o !== m) o.open = false; });
+  }));
+  document.addEventListener('click', ev => menus.forEach(m => { if (!m.contains(ev.target)) m.open = false; }));
+  document.addEventListener('keydown', ev => {
+    if (ev.key !== 'Escape') return;
+    menus.filter(m => m.open).forEach(m => { m.open = false; m.querySelector('summary').focus(); });
+  });
+
+  const overlay = document.querySelector('[data-overlay]');
+  if (overlay) {
+    const close = () => { overlay.hidden = true; };
+    overlay.querySelector('[data-overlay-close]').addEventListener('click', close);
+    overlay.addEventListener('click', ev => { if (ev.target === overlay) close(); });
+    document.addEventListener('keydown', ev => { if (ev.key === 'Escape') close(); });
+    document.querySelector('[data-overlay-open]').addEventListener('click', () => { overlay.hidden = false; });
+  }
+
   const toggle = document.querySelector('[data-collapse]');
   if (toggle) toggle.addEventListener('click', () => {
     const open = tasks.some(t => t.open);
@@ -372,5 +485,6 @@ footer { color: var(--muted); font-size: 12.5px; text-align: center; padding: 0 
   }
 })();
 </script>
+{{with .Live}}<script>new EventSource("{{.}}").onmessage = () => location.reload();</script>{{end}}
 </body>
 </html>

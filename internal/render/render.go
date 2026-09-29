@@ -34,22 +34,48 @@ type Page struct {
 	Start    string
 	Path     string
 	Graph    template.HTML
-	Tasks    []Task
+	Tasks    []TaskView
 	Servers  []Server
 	Warnings []string
 	Source   string
 	CLI      string
-	Scope    []Link
+	Scope    Scope
+	// Live is the URL of an event stream that fires when the file changes.
+	// Empty on a static page.
+	Live string
+	// Error is why the document does not validate. The page then shows what
+	// parsed, under an overlay that reports it.
+	Error string
 }
 
-// Link is one workflow version in scope, listed so the page can switch to it.
+// Header is what a document that does not validate still says about itself.
+type Header struct {
+	Name    string
+	Version string
+	Summary string
+	SHA     string
+}
+
+// Scope lists the workflows in the store and the versions of the one on the
+// page, so the page can switch to any of them.
+type Scope struct {
+	Dir       string
+	Workflows []Link
+	Versions  []Link
+}
+
+// Link is one entry of a Scope list.
 type Link struct {
 	Label   string
 	URL     string
 	Current bool
+	Count   int
+	Latest  bool
+	Sealed  bool
+	Invalid bool
 }
 
-type Task struct {
+type TaskView struct {
 	Name        string
 	Version     string
 	Summary     string
@@ -82,7 +108,7 @@ type Server struct {
 
 // Workflow writes the page for a compiled workflow. doc supplies the fields
 // compiling drops, such as each sha, and source is the file as written.
-func Workflow(out io.Writer, path string, source []byte, doc *manifest.Workflow, w *awf.Workflow, scope []Link) error {
+func Workflow(out io.Writer, path string, source []byte, doc *manifest.Workflow, w *awf.Workflow, scope Scope, live string) error {
 	p := Page{
 		Name:    w.Name,
 		Version: versionString(w.Version),
@@ -94,6 +120,7 @@ func Workflow(out io.Writer, path string, source []byte, doc *manifest.Workflow,
 		Source:  string(source),
 		CLI:     version.CLI,
 		Scope:   scope,
+		Live:    live,
 	}
 	if w.Start != nil {
 		p.Start = w.Start.Task.Name
@@ -132,6 +159,55 @@ func Workflow(out io.Writer, path string, source []byte, doc *manifest.Workflow,
 	return execute(out, p)
 }
 
+// Task writes the page for a stored task. name is its id.
+func Task(out io.Writer, path, name string, source []byte, doc *manifest.Task) error {
+	outcomes := make([]awf.Outcome, 0, len(doc.Outcomes))
+	for _, o := range doc.Outcomes {
+		outcomes = append(outcomes, awf.Outcome(o))
+	}
+	t, err := task(&awf.Task{
+		Name:     name,
+		Version:  doc.Version,
+		Summary:  doc.Summary,
+		Model:    doc.Model,
+		Input:    doc.Input,
+		Output:   doc.Output,
+		Outcomes: outcomes,
+		Body:     doc.Body,
+	}, doc)
+	if err != nil {
+		return err
+	}
+	t.Uses = doc.Uses
+	return execute(out, Page{
+		Name:    name,
+		Version: t.Version,
+		Summary: doc.Summary,
+		SHA:     sha(doc.SHA),
+		Path:    path,
+		Tasks:   []TaskView{t},
+		Source:  string(source),
+		CLI:     version.CLI,
+	})
+}
+
+// Invalid writes the page for a document that does not validate: its header
+// as far as it parses, its source, and err over the top.
+func Invalid(out io.Writer, path string, h Header, source []byte, err error, scope Scope, live string) error {
+	return execute(out, Page{
+		Name:    h.Name,
+		Version: h.Version,
+		Summary: h.Summary,
+		SHA:     h.SHA,
+		Path:    path,
+		Source:  string(source),
+		CLI:     version.CLI,
+		Scope:   scope,
+		Live:    live,
+		Error:   err.Error(),
+	})
+}
+
 func execute(out io.Writer, p Page) error {
 	var buf bytes.Buffer
 	if err := page.Execute(&buf, p); err != nil {
@@ -141,20 +217,20 @@ func execute(out io.Writer, p Page) error {
 	return err
 }
 
-func task(t *awf.Task, doc *manifest.Task) (Task, error) {
+func task(t *awf.Task, doc *manifest.Task) (TaskView, error) {
 	var body bytes.Buffer
 	if err := markdown.Convert([]byte(t.Body), &body); err != nil {
-		return Task{}, err
+		return TaskView{}, err
 	}
 	input, err := schemaText(t.Input)
 	if err != nil {
-		return Task{}, err
+		return TaskView{}, err
 	}
 	output, err := schemaText(t.Output)
 	if err != nil {
-		return Task{}, err
+		return TaskView{}, err
 	}
-	out := Task{
+	out := TaskView{
 		Name:    t.Name,
 		Version: versionString(t.Version),
 		Summary: t.Summary,

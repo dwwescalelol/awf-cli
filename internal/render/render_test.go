@@ -27,7 +27,7 @@ func renderBranchy(t *testing.T) string {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err := Workflow(&out, path, source, doc, w, nil); err != nil {
+	if err := Workflow(&out, path, source, doc, w, Scope{}, ""); err != nil {
 		t.Fatal(err)
 	}
 	return out.String()
@@ -41,7 +41,6 @@ func TestWorkflowPage(t *testing.T) {
 		`data-task="orphan"`,
 		`class="node terminal"`,
 		`class="node unreached"`,
-		`class="edge back"`,
 		`unreachable from start`,
 		`id="mcp-tracker"`,
 		`<th>kind</th>`,

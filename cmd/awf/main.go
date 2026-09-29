@@ -17,7 +17,7 @@ func main() {
 		Version:       version.CLI,
 	}
 	root.SetVersionTemplate("awf {{.Version}}\n")
-	root.AddCommand(lsCmd(), newCmd(), renderCmd(), validateCmd())
+	root.AddCommand(lsCmd(), newCmd(), renderCmd(), uiCmd(), validateCmd())
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, formatErr(err))

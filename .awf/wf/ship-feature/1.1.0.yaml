@@ -1,0 +1,293 @@
+openawf: 0.1.0
+name: ship-feature
+summary: Take an incoming ticket from triage to a verified production release.
+model: claude-sonnet-5
+version: 1.1.0
+sha: null
+start: intake
+orchestration:
+  announce: null
+  ask-reporter:
+    answered: reproduce
+    stale: close-stale
+  close-stale: null
+  code-review:
+    approve: merge
+    changes:
+      task: implement
+      retries: 2
+      session: resume
+  deploy-prod: verify-prod
+  deploy-staging: smoke-test
+  implement: test
+  intake: triage
+  merge: deploy-staging
+  plan: implement
+  reproduce:
+    cannot: ask-reporter
+    ok: plan
+  rollback: implement
+  security-scan:
+    clean: code-review
+    findings:
+      task: implement
+      session: resume
+  smoke-test:
+    fail: rollback
+    pass: deploy-prod
+  spec-review:
+    approve: plan
+    revise:
+      task: write-spec
+      retries: 2
+      session: resume
+  test:
+    fail:
+      task: implement
+      retries: 3
+      session: resume
+    pass: security-scan
+  triage:
+    bug: reproduce
+    chore: plan
+    feature: write-spec
+  verify-prod:
+    degraded: rollback
+    healthy: announce
+  write-spec: spec-review
+tasks:
+  announce:
+    sha: null
+    summary: Announce the release and close the ticket.
+    uses:
+      - slack
+      - linear
+    body: |
+      # Announce
+      
+      Post release notes and close the ticket.
+  ask-reporter:
+    sha: null
+    summary: Ask the reporter for the missing detail and wait.
+    outcomes:
+      - answered
+      - stale
+    uses:
+      - linear
+    body: |
+      # Ask reporter
+      
+      Comment on the ticket with specific questions. Emit `stale` after seven
+      days without a reply.
+  close-stale:
+    sha: null
+    summary: Close the ticket as unreproducible.
+    uses:
+      - linear
+    body: |
+      # Close stale
+      
+      Close the ticket with a note linking the unanswered questions.
+  code-review:
+    sha: null
+    summary: Review the diff for correctness and design.
+    model: claude-opus-5-5
+    outcomes:
+      - approve
+      - changes
+    uses:
+      - github
+    body: |
+      # Code review
+      
+      Review the diff as a senior engineer. Emit `changes` with inline comments.
+  deploy-prod:
+    sha: null
+    summary: Deploy to production behind a canary.
+    uses:
+      - k8s
+    body: |
+      # Deploy prod
+      
+      Roll out to 5% of traffic, then to all of it.
+  deploy-staging:
+    sha: null
+    summary: Deploy main to staging.
+    uses:
+      - k8s
+    body: |
+      # Deploy staging
+      
+      Roll out the new image to staging and wait for it to be ready.
+  implement:
+    sha: null
+    summary: Make the change on a branch.
+    uses:
+      - github
+    body: |
+      # Implement
+      
+      Implement the plan. On a retry, fix only what the previous task reported.
+  intake:
+    sha: null
+    summary: Pull the ticket and its linked context.
+    input:
+      ticket: string
+    uses:
+      - linear
+    body: |
+      # Intake
+      
+      Fetch the ticket, its comments and any linked tickets. Return them as one
+      context bundle for triage.
+  merge:
+    sha: null
+    summary: Squash-merge the pull request.
+    uses:
+      - github
+    body: |
+      # Merge
+      
+      Squash-merge once checks are green.
+  plan:
+    sha: null
+    summary: Break the work into ordered steps.
+    model: claude-opus-5-5
+    body: |
+      # Plan
+      
+      List the files to change and the order to change them in.
+  reproduce:
+    sha: null
+    summary: Reproduce the bug against main.
+    outcomes:
+      - ok
+      - cannot
+    uses:
+      - sentry
+      - github
+    body: |
+      # Reproduce
+      
+      Write a failing test that shows the bug. Emit `cannot` when the report
+      lacks the detail to reproduce it.
+  rollback:
+    sha: null
+    summary: Roll back the last deploy.
+    uses:
+      - k8s
+      - slack
+    body: |
+      # Rollback
+      
+      Restore the previous image and post the reason to the team channel.
+  security-scan:
+    sha: null
+    summary: Scan the diff for vulnerabilities and leaked secrets.
+    outcomes:
+      - clean
+      - findings
+    uses:
+      - github
+    body: |
+      # Security scan
+      
+      Run static analysis and a secret scan over the diff.
+  smoke-test:
+    sha: null
+    summary: Run smoke tests against staging.
+    outcomes:
+      - pass
+      - fail
+    body: |
+      # Smoke test
+      
+      Hit the critical paths on staging.
+  spec-review:
+    sha: null
+    summary: Review the spec against the ticket.
+    outcomes:
+      - approve
+      - revise
+    body: |
+      # Spec review
+      
+      Check every acceptance criterion traces to the ticket. Emit `revise`
+      with the gaps.
+  test:
+    sha: null
+    summary: Run the full test suite.
+    outcomes:
+      - pass
+      - fail
+    uses:
+      - github
+    body: |
+      # Test
+      
+      Run unit, integration and e2e tests. Emit `fail` with the failing output.
+  triage:
+    sha: null
+    summary: Decide whether the ticket is a bug, a feature or a chore.
+    outcomes:
+      - bug
+      - feature
+      - chore
+    uses:
+      - linear
+    body: |
+      # Triage
+      
+      | outcome | when |
+      |---|---|
+      | `bug` | existing behaviour is wrong |
+      | `feature` | new behaviour is requested |
+      | `chore` | no behaviour changes |
+  verify-prod:
+    sha: null
+    summary: Watch error rates after the rollout.
+    outcomes:
+      - healthy
+      - degraded
+    uses:
+      - sentry
+    body: |
+      # Verify prod
+      
+      Compare error rates for 30 minutes against the previous release.
+  write-spec:
+    sha: null
+    summary: Draft a spec for the feature.
+    output:
+      spec: string
+    model: claude-opus-5-5
+    body: |
+      # Write spec
+      
+      Describe the behaviour, the interface and the acceptance criteria.
+mcp:
+  github:
+    transport: http
+    tools:
+      - create_pr
+      - merge_pr
+      - get_diff
+      - run_workflow
+  k8s:
+    transport: stdio
+    tools: "*"
+  linear:
+    transport: http
+    tools:
+      - get_issue
+      - comment
+      - close_issue
+  sentry:
+    transport: http
+    tools:
+      - search_issues
+      - error_rate
+  slack:
+    transport: http
+    tools:
+      - post_message

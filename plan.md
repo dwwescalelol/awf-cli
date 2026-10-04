@@ -42,7 +42,8 @@ A task file is a fragment, not a document. The spec's "YAML or JSON" line covers
 | `publish` | commit, tag and push a sealed document to a git remote |
 | `propose` | push a change to a review branch and open it for review |
 | `remote` | `init` a remote's layout; `ls`, `render`, `diff` its contents and proposals |
-| `ls` | installed workflows, or one workflow's tasks + versions |
+| `ls` | installed workflows and tasks in scope |
+| `describe` | print one document's header, tasks, orchestration and mcp |
 | `render` | swagger-style HTML, serves on localhost (`--out` for a file) |
 | `run` | execute the FSM, live TUI view |
 | `-v` | CLI version |
@@ -80,7 +81,7 @@ Canonical form: **bundle → YAML to JSON → JCS (RFC 8785) → sha256**.
 
 Bundling first is what makes it work. Hashing the document as written would hash a `$ref` string rather than the task content, so `bundle` and `extract` would change the hash of a semantically identical workflow and break `seal`/`verify` across the pair. Bundling first makes them hash-neutral.
 
-Excluded from the hash: `sha` itself, `x-meta` (declared ignored by execution), and the version. The version is a mutable label until its tag is pushed, so including it would change the sha of unchanged content. Two versions with identical content therefore share a sha, and sha to `id@version` is one-to-many.
+Excluded from the hash: `sha` itself and the version. The version is a mutable label until its tag is pushed, so including it would change the sha of unchanged content. Two versions with identical content therefore share a sha, and sha to `id@version` is one-to-many.
 
 Tasks hash the same way — frontmatter + `body` as one canonical JSON object.
 
@@ -117,6 +118,56 @@ Noun subcommand, not a flag. `install` detects type from content; `new` has no c
 Editing a sealed document is a validate **error**, not a warning: the sha cannot match.
 
 `seal` is a precondition of `publish`, not a replacement for it. `publish` commits, tags and pushes; see `remotes`.
+
+## describe
+
+Opens one document and prints it. Noun subcommand, because the output differs by kind.
+
+```
+awf describe workflow feat-dev
+```
+
+```
+feat-dev 0.2.0    draft
+model    opus
+start    plan
+
+tasks
+  plan    0.1.0  opus
+  review  0.1.0  sonnet   ok, fail   fs, gh
+  ship    0.1.0  opus     $ref ./ship.md
+
+orchestration
+  plan    -> review
+  review  ok   -> ship
+          fail -> plan
+  ship    end
+
+mcp
+  fs  stdio  *
+  gh  http   create_pr, list_issues
+```
+
+```
+awf describe task create-diff
+```
+
+```
+create-diff 0.1.0    draft
+model    opus
+outcomes ok, fail
+uses     fs, gh
+
+input    {branch: string}
+output   {diff: string}
+
+summary  Produce a diff for the branch.
+
+---
+# create-diff
+
+Describe the work this task performs, and what it returns.
+```
 
 ## Layout
 

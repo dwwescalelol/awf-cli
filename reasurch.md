@@ -1,3 +1,5 @@
+# Collaboration and Sharing
+
 Looking to Go for inspiration in building a federated remote install service.
 
 By leveraging git and git repository services like Bitbucket, GitHub and GitLab, awf can avoid the burden of hosting and maintaining a centralised remote repository. This gives the responsibility of version control, version tagging and permissioning to git.

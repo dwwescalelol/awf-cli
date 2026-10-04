@@ -1,0 +1,11 @@
+{{define "graph"}}<svg class="fsm" viewBox="{{f0 .MinX}} 0 {{f0 .Width}} {{f0 .Height}}" width="{{f0 .Width}}" height="{{f0 .Height}}" role="img" aria-label="State machine of {{.Name}}"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" class="arrowhead"/></marker></defs>
+{{- with .Entry}}<circle class="entry" cx="{{f .X}}" cy="{{f .Y}}" r="5"/><path class="edge" d="M{{f .X}},{{f .Top}} V{{f .End}}" marker-end="url(#arrow)"/>{{end}}
+{{- range .Edges}}<path class="edge" data-from="{{.From}}" data-to="{{.To}}" d="{{.D}}" marker-end="url(#arrow)"/>{{end}}
+{{- range .Nodes}}<a class="{{.Class}}" href="#task-{{.Name}}" data-task="{{.Name}}"><title>{{.Name}}</title><rect class="box" x="{{f .X}}" y="{{f .Y}}" width="{{f .W}}" height="{{.H}}" rx="7"/>
+{{- if .Terminal}}<rect class="inner" x="{{f .InnerX}}" y="{{f .InnerY}}" width="{{f .InnerW}}" height="{{.InnerH}}" rx="4"/>{{end -}}
+<text x="{{f .CX}}" y="{{f .TextY}}">{{.Name}}</text></a>{{end}}
+{{- range $l := .Labels}}<text class="label" x="{{f $l.X}}" y="{{f $l.Y}}" text-anchor="{{$l.Anchor}}">
+{{- with $l.On}}<tspan class="outcome" x="{{f $l.X}}">{{.}}</tspan>{{end}}
+{{- with $l.Policy}}<tspan class="policy" x="{{f $l.X}}" dy="{{f0 $l.DY}}">{{.}}</tspan>{{end -}}
+</text>{{end -}}
+</svg>{{end}}

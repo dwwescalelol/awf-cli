@@ -2,7 +2,6 @@ package render
 
 import (
 	"fmt"
-	"html"
 	"html/template"
 	"slices"
 	"strings"
@@ -263,16 +262,12 @@ func SVG(w *awf.Workflow) template.HTML {
 	lo, hi := leftEdge-float64(len(leftLanes))*laneGap, right+float64(len(rightLanes))*laneGap
 	grow := func(l, h float64) { lo, hi = min(lo, l), max(hi, h) }
 
-	var b strings.Builder
-	b.WriteString(`<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" class="arrowhead"/></marker></defs>`)
-
+	g := graph{Name: w.Name}
 	if w.Start != nil {
 		s := l.byKey[w.Start]
-		fmt.Fprintf(&b, `<circle class="entry" cx="%.1f" cy="%.1f" r="5"/>`, s.cx(), float64(pad))
-		fmt.Fprintf(&b, `<path class="edge" d="M%.1f,%.1f V%.1f" marker-end="url(#arrow)"/>`, s.cx(), float64(pad)+5, s.y-1)
+		g.Entry = &entry{X: s.cx(), Y: pad, Top: pad + 5, End: s.y - 1}
 	}
 
-	var labels strings.Builder
 	routed := func(i int) bool {
 		_, left := leftLanes[i]
 		_, onRight := rightLanes[i]
@@ -287,18 +282,17 @@ func SVG(w *awf.Workflow) template.HTML {
 		}
 	}
 
+	path := func(a arc, format string, args ...any) {
+		g.Edges = append(g.Edges, edgePath{From: a.from.state.Task.Name, To: a.to.state.Task.Name, D: fmt.Sprintf(format, args...)})
+	}
 	for i, a := range l.arcs {
-		cls := "edge"
-		from, to := esc(a.from.state.Task.Name), esc(a.to.state.Task.Name)
-
 		if a.from == a.to {
 			// A circle on the top edge near the left corner, clear of the
 			// edges that enter at the top centre and the lanes at the sides.
 			x, y := a.from.x+loopInset, a.from.y
 			top := y - loopLead
-			fmt.Fprintf(&b, `<path class="%s" data-from="%s" data-to="%s" d="M%.1f,%.1f V%.1f A%d,%d 0 0 0 %.1f,%.1f V%.1f" marker-end="url(#arrow)"/>`,
-				cls, from, to, x+loopR, y, top, loopR, loopR, x-loopR, top, y-1)
-			grow(label(&labels, a.edge, x-loopR-6, top-loopR/2, true))
+			path(a, "M%.1f,%.1f V%.1f A%d,%d 0 0 0 %.1f,%.1f V%.1f", x+loopR, y, top, loopR, loopR, x-loopR, top, y-1)
+			grow(g.label(a.edge, x-loopR-6, top-loopR/2, true))
 			continue
 		}
 
@@ -320,11 +314,11 @@ func SVG(w *awf.Workflow) template.HTML {
 			if left {
 				x, x1, x2, side = leftEdge-laneGap*float64(lane+1), a.from.x, a.to.x-1, -1
 			}
-			fmt.Fprintf(&b, `<path class="%s" data-from="%s" data-to="%s" d="M%.1f,%.1f H%.1f Q%.1f,%.1f %.1f,%.1f V%.1f Q%.1f,%.1f %.1f,%.1f H%.1f" marker-end="url(#arrow)"/>`,
-				cls, from, to, x1, y1, x-corner*side, x, y1, x, y1+corner*dir, y2-corner*dir, x, y2, x-corner*side, y2, x2)
+			path(a, "M%.1f,%.1f H%.1f Q%.1f,%.1f %.1f,%.1f V%.1f Q%.1f,%.1f %.1f,%.1f H%.1f",
+				x1, y1, x-corner*side, x, y1, x, y1+corner*dir, y2-corner*dir, x, y2, x-corner*side, y2, x2)
 			// Beside the lane where it leaves its source, so labels of lanes
 			// that run side by side do not meet.
-			grow(label(&labels, a.edge, x+6*side, y1+dir*(nodeH/2+10), left))
+			grow(g.label(a.edge, x+6*side, y1+dir*(nodeH/2+10), left))
 			continue
 		}
 
@@ -334,13 +328,11 @@ func SVG(w *awf.Workflow) template.HTML {
 		tx := a.to.cx() + spread(slices.Index(in, i), len(in), a.to.w)
 		sy, ty := a.from.bottom(), a.to.y-1
 		mid := (sy + ty) / 2
-		fmt.Fprintf(&b, `<path class="%s" data-from="%s" data-to="%s" d="M%.1f,%.1f C%.1f,%.1f %.1f,%.1f %.1f,%.1f" marker-end="url(#arrow)"/>`,
-			cls, from, to, sx, sy, sx, mid, tx, mid, tx, ty)
-		grow(label(&labels, a.edge, (sx+tx)/2+7, mid, false))
+		path(a, "M%.1f,%.1f C%.1f,%.1f %.1f,%.1f %.1f,%.1f", sx, sy, sx, mid, tx, mid, tx, ty)
+		grow(g.label(a.edge, (sx+tx)/2+7, mid, false))
 	}
 
 	for _, n := range l.nodes {
-		name := esc(n.state.Task.Name)
 		cls := "node"
 		if n.state.IsTerminal() {
 			cls += " terminal"
@@ -351,22 +343,49 @@ func SVG(w *awf.Workflow) template.HTML {
 		if n.state == w.Start {
 			cls += " start"
 		}
-		fmt.Fprintf(&b, `<a class="%s" href="#task-%s" data-task="%s"><title>%s</title>`, cls, name, name, name)
-		fmt.Fprintf(&b, `<rect class="box" x="%.1f" y="%.1f" width="%.1f" height="%d" rx="7"/>`, n.x, n.y, n.w, nodeH)
-		if n.state.IsTerminal() {
-			fmt.Fprintf(&b, `<rect class="inner" x="%.1f" y="%.1f" width="%.1f" height="%d" rx="4"/>`, n.x+3.5, n.y+3.5, n.w-7, nodeH-7)
-		}
-		fmt.Fprintf(&b, `<text x="%.1f" y="%.1f">%s</text></a>`, n.cx(), n.midY()+4.5, name)
+		g.Nodes = append(g.Nodes, box{
+			Name: n.state.Task.Name, Class: cls, Terminal: n.state.IsTerminal(),
+			X: n.x, Y: n.y, W: n.w, H: nodeH,
+			InnerX: n.x + 3.5, InnerY: n.y + 3.5, InnerW: n.w - 7, InnerH: nodeH - 7,
+			CX: n.cx(), TextY: n.midY() + 4.5,
+		})
 	}
 
-	b.WriteString(labels.String())
-	b.WriteString(`</svg>`)
+	g.MinX = min(0, lo-pad)
+	g.Width, g.Height = hi+pad-g.MinX, bottom+pad
+	var b strings.Builder
+	if err := pages.ExecuteTemplate(&b, "graph", g); err != nil {
+		panic(err)
+	}
+	return template.HTML(b.String())
+}
 
-	minX := min(0, lo-pad)
-	width, height := hi+pad-minX, bottom+pad
-	head := fmt.Sprintf(`<svg class="fsm" viewBox="%.0f 0 %.0f %.0f" width="%.0f" height="%.0f" role="img" aria-label="State machine of %s">`,
-		minX, width, height, width, height, esc(w.Name))
-	return template.HTML(head + b.String())
+type graph struct {
+	MinX, Width, Height float64
+	Name                string
+	Entry               *entry
+	Edges               []edgePath
+	Nodes               []box
+	Labels              []edgeLabel
+}
+
+type entry struct{ X, Y, Top, End float64 }
+
+type edgePath struct{ From, To, D string }
+
+type box struct {
+	Name, Class            string
+	Terminal               bool
+	X, Y, W                float64
+	H                      int
+	InnerX, InnerY, InnerW float64
+	InnerH                 int
+	CX, TextY              float64
+}
+
+type edgeLabel struct {
+	X, Y, DY           float64
+	Anchor, On, Policy string
 }
 
 func (l *layered) rightmost(n *node) bool {
@@ -384,7 +403,7 @@ func spread(i, n int, width float64) float64 {
 
 // label draws an edge's outcome and policy at x, y, ending there when end is
 // set, and returns the horizontal bounds of the text.
-func label(b *strings.Builder, e awf.Edge, x, y float64, end bool) (float64, float64) {
+func (g *graph) label(e awf.Edge, x, y float64, end bool) (float64, float64) {
 	var policy []string
 	if e.Retries != nil {
 		policy = append(policy, fmt.Sprintf("%d retries", *e.Retries))
@@ -402,26 +421,17 @@ func label(b *strings.Builder, e awf.Edge, x, y float64, end bool) (float64, flo
 	if len(policy) > 0 {
 		lines++
 	}
-	top := y - float64(lines-1)*7 + 4
-	anchor := "start"
+	l := edgeLabel{X: x, Y: y - float64(lines-1)*7 + 4, Anchor: "start", On: string(e.On), Policy: strings.Join(policy, ", ")}
 	if end {
-		anchor = "end"
+		l.Anchor = "end"
 	}
-	fmt.Fprintf(b, `<text class="label" x="%.1f" y="%.1f" text-anchor="%s">`, x, top, anchor)
-	dy := 0.0
 	if e.On != "" {
-		fmt.Fprintf(b, `<tspan class="outcome" x="%.1f">%s</tspan>`, x, esc(string(e.On)))
-		dy = 14
+		l.DY = 14
 	}
-	if len(policy) > 0 {
-		fmt.Fprintf(b, `<tspan class="policy" x="%.1f" dy="%.0f">%s</tspan>`, x, dy, esc(strings.Join(policy, ", ")))
-	}
-	b.WriteString(`</text>`)
-	width := float64(max(len(e.On), len(strings.Join(policy, ", ")))) * labelChar
+	g.Labels = append(g.Labels, l)
+	width := float64(max(len(l.On), len(l.Policy))) * labelChar
 	if end {
 		return x - width, x
 	}
 	return x, x + width
 }
-
-func esc(s string) string { return html.EscapeString(s) }

@@ -3,10 +3,11 @@ package render
 
 import (
 	"bytes"
-	_ "embed"
+	"embed"
 	"html/template"
 	"io"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/dwwescalelol/awf-cli/internal/awf"
@@ -17,10 +18,13 @@ import (
 	"github.com/yuin/goldmark/extension"
 )
 
-//go:embed page.html.tmpl
-var pageTemplate string
+//go:embed *.html.tmpl
+var templates embed.FS
 
-var page = template.Must(template.New("page").Parse(pageTemplate))
+var pages = template.Must(template.New("").Funcs(template.FuncMap{
+	"f":  func(v float64) string { return strconv.FormatFloat(v, 'f', 1, 64) },
+	"f0": func(v float64) string { return strconv.FormatFloat(v, 'f', 0, 64) },
+}).ParseFS(templates, "*.html.tmpl"))
 
 // Markdown renders without raw HTML, so a task body cannot inject script.
 var markdown = goldmark.New(goldmark.WithExtensions(extension.GFM))
@@ -208,9 +212,35 @@ func Invalid(out io.Writer, path string, h Header, source []byte, err error, sco
 	})
 }
 
-func execute(out io.Writer, p Page) error {
+func Message(out io.Writer, title, hint, detail, live string) error {
+	return run(out, "message.html.tmpl", struct{ Title, Hint, Detail, Live string }{title, hint, detail, live})
+}
+
+func WorkflowHeader(name string, doc *manifest.Workflow) Header {
+	h := Header{Name: name}
+	if doc == nil {
+		return h
+	}
+	if doc.Name != "" {
+		h.Name = doc.Name
+	}
+	h.Version, h.Summary, h.SHA = versionString(doc.Version), doc.Summary, sha(doc.SHA)
+	return h
+}
+
+func TaskHeader(name string, doc *manifest.Task) Header {
+	h := Header{Name: name}
+	if doc != nil {
+		h.Version, h.Summary, h.SHA = versionString(doc.Version), doc.Summary, sha(doc.SHA)
+	}
+	return h
+}
+
+func execute(out io.Writer, p Page) error { return run(out, "page.html.tmpl", p) }
+
+func run(out io.Writer, name string, data any) error {
 	var buf bytes.Buffer
-	if err := page.Execute(&buf, p); err != nil {
+	if err := pages.ExecuteTemplate(&buf, name, data); err != nil {
 		return err
 	}
 	_, err := buf.WriteTo(out)

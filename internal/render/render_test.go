@@ -2,32 +2,22 @@ package render
 
 import (
 	"bytes"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/dwwescalelol/awf-cli/internal/load"
-	"github.com/dwwescalelol/awf-cli/internal/manifest"
 )
 
 func renderBranchy(t *testing.T) string {
 	t.Helper()
 	path := filepath.Join("testdata", "branchy.yaml")
-	source, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	w, err := load.Workflow(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	doc, err := manifest.Unmarshal(source)
+	f, err := load.ReadWorkflow(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err := Workflow(&out, path, source, doc, w, Scope{}, ""); err != nil {
+	if err := Workflow(&out, path, f.Source, f.Doc, f.Compiled, Scope{}, ""); err != nil {
 		t.Fatal(err)
 	}
 	return out.String()

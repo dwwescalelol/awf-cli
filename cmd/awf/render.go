@@ -5,25 +5,24 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/dwwescalelol/awf-cli/internal/load"
-	"github.com/dwwescalelol/awf-cli/internal/manifest"
 	"github.com/dwwescalelol/awf-cli/internal/render"
 	"github.com/dwwescalelol/awf-cli/internal/store"
 	"github.com/spf13/cobra"
 )
 
-// errInvalid reports that render wrote the page for a document that does not
-// validate. The page itself shows why.
 var errInvalid = errors.New("does not validate, the page shows why")
 
 func renderCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "render ([-t] <id>[@<version>] | -f <path>)",
 		Short: "Open a workflow or task as an HTML page in the browser",
+		Long:  "Open a workflow or task as an HTML page in the browser. The page is written to a temporary file, which is left for the browser to read.",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			global, _ := cmd.Flags().GetBool("global")
@@ -31,36 +30,13 @@ func renderCmd() *cobra.Command {
 			task, _ := cmd.Flags().GetBool("task")
 			source, _ := cmd.Flags().GetBool("source")
 
-			kind := store.Workflow
-			if task || strings.HasSuffix(file, ".md") {
-				kind = store.Task
-			}
-			path, _, err := target(kind, args, file, global)
-			if err != nil {
-				return err
-			}
-
-			var page bytes.Buffer
-			if kind == store.Task {
-				err = renderTask(&page, path)
-			} else {
-				err = renderWorkflow(&page, path, render.Scope{}, "")
-			}
+			page, err := renderPage(args, file, task, global)
 			if err != nil && !errors.Is(err, errInvalid) {
 				return err
 			}
-
-			if source {
-				if _, writeErr := page.WriteTo(os.Stdout); writeErr != nil {
-					return writeErr
-				}
-				return err
+			if showErr := show(page, source); showErr != nil {
+				return showErr
 			}
-			opened, openErr := openPage(page.Bytes())
-			if openErr != nil {
-				return openErr
-			}
-			fmt.Println(opened)
 			return err
 		},
 	}
@@ -71,9 +47,41 @@ func renderCmd() *cobra.Command {
 	return cmd
 }
 
-// openPage writes page to a temporary file and opens it in the default
-// browser. It returns the file's path.
-func openPage(page []byte) (string, error) {
+func renderPage(args []string, file string, task, global bool) ([]byte, error) {
+	kind := store.KindOf(file)
+	if task {
+		kind = store.Task
+	}
+	path, at, err := target(kind, args, file, global)
+	if err != nil {
+		return nil, err
+	}
+	var page bytes.Buffer
+	if kind == store.Task {
+		err = renderTask(&page, path, at)
+	} else {
+		err = renderWorkflow(&page, path, at, render.Scope{}, "")
+	}
+	return page.Bytes(), err
+}
+
+func show(page []byte, source bool) error {
+	if source {
+		_, err := os.Stdout.Write(page)
+		return err
+	}
+	u, err := writePage(page)
+	if err != nil {
+		return err
+	}
+	fmt.Println(u)
+	if err := browse(u); err != nil {
+		fmt.Fprintln(os.Stderr, "warning: open browser: "+err.Error())
+	}
+	return nil
+}
+
+func writePage(page []byte) (string, error) {
 	f, err := os.CreateTemp("", "awf-render-*.html")
 	if err != nil {
 		return "", err
@@ -85,91 +93,52 @@ func openPage(page []byte) (string, error) {
 	if err := f.Close(); err != nil {
 		return "", err
 	}
-	browse("file://" + f.Name())
-	return f.Name(), nil
+	path := filepath.ToSlash(f.Name())
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	return (&url.URL{Scheme: "file", Path: path}).String(), nil
 }
 
-// renderWorkflow writes the workflow's page. A workflow that does not
-// validate still gets a page, reporting why, and the result is errInvalid.
-func renderWorkflow(w io.Writer, path string, scope render.Scope, live string) error {
-	source, err := os.ReadFile(path)
-	if err != nil {
+func renderWorkflow(w io.Writer, path string, at *stored, scope render.Scope, live string) error {
+	f, err := load.ReadWorkflow(path)
+	if f == nil {
 		return err
 	}
-	compiled, err := load.Workflow(path)
-	if err != nil {
-		return invalid(w, path, workflowHeader(path, source), source, err, scope, live)
+	if err == nil {
+		err = at.check(f.Doc.Name, f.Doc.Version)
 	}
-	doc, err := manifest.Unmarshal(source)
 	if err != nil {
-		return invalid(w, path, workflowHeader(path, source), source, err, scope, live)
+		return invalid(w, path, render.WorkflowHeader(fileName(path), f.Doc), f.Source, err, scope, live)
 	}
-	return render.Workflow(w, path, source, doc, compiled, scope, live)
+	return render.Workflow(w, path, f.Source, f.Doc, f.Compiled, scope, live)
 }
 
-// renderTask writes the task's page, or its invalid page as renderWorkflow does.
-func renderTask(w io.Writer, path string) error {
-	source, err := os.ReadFile(path)
-	if err != nil {
+func renderTask(w io.Writer, path string, at *stored) error {
+	name := fileName(path)
+	if at != nil {
+		name = at.id.String()
+	}
+	f, err := load.ReadTask(path)
+	if f == nil {
 		return err
 	}
-	name := taskName(path)
-	t, err := load.Task(path)
-	if err != nil {
-		h := render.Header{Name: name}
-		if doc, parseErr := manifest.UnmarshalTask(source); parseErr == nil {
-			h.Version, h.Summary, h.SHA = versionLabel(doc.Version.String()), doc.Summary, deref(doc.SHA)
-		}
-		return invalid(w, path, h, source, err, render.Scope{}, "")
+	if err == nil {
+		err = at.check("", f.Doc.Version)
 	}
-	return render.Task(w, path, name, source, t)
+	if err != nil {
+		return invalid(w, path, render.TaskHeader(name, f.Doc), f.Source, err, render.Scope{}, "")
+	}
+	return render.Task(w, path, name, f.Source, f.Doc)
 }
 
 func invalid(w io.Writer, path string, h render.Header, source []byte, cause error, scope render.Scope, live string) error {
 	if err := render.Invalid(w, path, h, source, cause, scope, live); err != nil {
 		return err
 	}
-	return errInvalid
+	return fmt.Errorf("%s: %w", path, errInvalid)
 }
 
-// workflowHeader reads what it can of a workflow that does not validate. Its
-// name falls back to the file name.
-func workflowHeader(path string, source []byte) render.Header {
-	h := render.Header{Name: strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))}
-	doc, err := manifest.Unmarshal(source)
-	if err != nil {
-		return h
-	}
-	if doc.Name != "" {
-		h.Name = doc.Name
-	}
-	h.Version, h.Summary, h.SHA = versionLabel(doc.Version.String()), doc.Summary, deref(doc.SHA)
-	return h
-}
-
-// taskName names a task file by its id: the directory it is stored under, or
-// the file name outside a store.
-func taskName(path string) string {
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		abs = path
-	}
-	if filepath.Base(filepath.Dir(filepath.Dir(abs))) == "task" {
-		return filepath.Base(filepath.Dir(abs))
-	}
+func fileName(path string) string {
 	return strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
-}
-
-func versionLabel(v string) string {
-	if v == "0.0.0" {
-		return ""
-	}
-	return v
-}
-
-func deref(s *string) string {
-	if s == nil {
-		return ""
-	}
-	return *s
 }

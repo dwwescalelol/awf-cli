@@ -22,7 +22,7 @@ func TestRenderStored(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if err := renderWorkflow(&out, wf.path, render.Scope{}, ""); err != nil {
+	if err := renderWorkflow(&out, wf.path, nil, render.Scope{}, ""); err != nil {
 		t.Fatalf("workflow: %v", err)
 	}
 	page := out.String()
@@ -34,7 +34,7 @@ func TestRenderStored(t *testing.T) {
 	}
 
 	out.Reset()
-	if err := renderTask(&out, task.path); err != nil {
+	if err := renderTask(&out, task.path, nil); err != nil {
 		t.Fatalf("task: %v", err)
 	}
 	page = out.String()
@@ -56,7 +56,7 @@ func TestRenderInvalid(t *testing.T) {
 	rewrite(t, bad.path, "start: start", "start: nowhere")
 
 	var out bytes.Buffer
-	if err := renderWorkflow(&out, bad.path, render.Scope{}, ""); !errors.Is(err, errInvalid) {
+	if err := renderWorkflow(&out, bad.path, nil, render.Scope{}, ""); !errors.Is(err, errInvalid) {
 		t.Fatalf("got %v, want %v", err, errInvalid)
 	}
 	page := out.String()
@@ -68,7 +68,7 @@ func TestRenderInvalid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	scope, err := links(s, stored{id: "deploy", version: good.version})
+	scope, _, err := links(s, stored{id: "deploy", version: good.version})
 	if err != nil {
 		t.Fatalf("a malformed sibling failed the listing: %v", err)
 	}

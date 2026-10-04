@@ -62,8 +62,8 @@ type stored struct {
 }
 
 func validate(args []string, file string, task, global bool) (string, []error, error) {
-	kind := store.Workflow
-	if task || strings.HasSuffix(file, ".md") {
+	kind := store.KindOf(file)
+	if task {
 		kind = store.Task
 	}
 	path, at, err := target(kind, args, file, global)

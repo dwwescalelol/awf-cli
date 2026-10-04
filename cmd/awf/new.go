@@ -157,7 +157,6 @@ func blankWorkflow(id string, v version.Version) *manifest.Workflow {
 	return &manifest.Workflow{
 		OpenAWF:       version.SpecVersion,
 		Name:          id,
-		Summary:       "What this workflow does.",
 		Version:       v,
 		Start:         start,
 		Orchestration: manifest.Orchestration{start: manifest.Transition{}},

@@ -1,0 +1,227 @@
+openawf: 0.1.0
+name: ship-feature
+summary: Take an incoming ticket from triage to a verified production release.
+model: claude-sonnet-5
+version: 1.0.0
+sha: null
+start: intake
+orchestration:
+  intake: triage
+  triage:
+    bug: reproduce
+    feature: write-spec
+    chore: plan
+  reproduce:
+    ok: plan
+    cannot: ask-reporter
+  ask-reporter:
+    answered: reproduce
+    stale: close-stale
+  close-stale: null
+  write-spec: spec-review
+  spec-review:
+    approve: plan
+    revise:
+      task: write-spec
+      retries: 2
+      session: resume
+  plan: implement
+  implement: test
+  test:
+    pass: security-scan
+    fail:
+      task: implement
+      retries: 3
+      session: resume
+  security-scan:
+    clean: code-review
+    findings:
+      task: implement
+      session: resume
+  code-review:
+    approve: merge
+    changes:
+      task: implement
+      retries: 2
+      session: resume
+  merge: deploy-staging
+  deploy-staging: smoke-test
+  smoke-test:
+    pass: deploy-prod
+    fail: rollback
+  rollback: implement
+  deploy-prod: verify-prod
+  verify-prod:
+    healthy: announce
+    degraded: rollback
+  announce: null
+tasks:
+  intake:
+    summary: Pull the ticket and its linked context.
+    uses: [linear]
+    input:
+      ticket: string
+    body: |
+      # Intake
+
+      Fetch the ticket, its comments and any linked tickets. Return them as one
+      context bundle for triage.
+  triage:
+    summary: Decide whether the ticket is a bug, a feature or a chore.
+    outcomes: [bug, feature, chore]
+    uses: [linear]
+    body: |
+      # Triage
+
+      | outcome | when |
+      |---|---|
+      | `bug` | existing behaviour is wrong |
+      | `feature` | new behaviour is requested |
+      | `chore` | no behaviour changes |
+  reproduce:
+    summary: Reproduce the bug against main.
+    outcomes: [ok, cannot]
+    uses: [sentry, github]
+    body: |
+      # Reproduce
+
+      Write a failing test that shows the bug. Emit `cannot` when the report
+      lacks the detail to reproduce it.
+  ask-reporter:
+    summary: Ask the reporter for the missing detail and wait.
+    outcomes: [answered, stale]
+    uses: [linear]
+    body: |
+      # Ask reporter
+
+      Comment on the ticket with specific questions. Emit `stale` after seven
+      days without a reply.
+  close-stale:
+    summary: Close the ticket as unreproducible.
+    uses: [linear]
+    body: |
+      # Close stale
+
+      Close the ticket with a note linking the unanswered questions.
+  write-spec:
+    summary: Draft a spec for the feature.
+    model: claude-opus-5-5
+    output:
+      spec: string
+    body: |
+      # Write spec
+
+      Describe the behaviour, the interface and the acceptance criteria.
+  spec-review:
+    summary: Review the spec against the ticket.
+    outcomes: [approve, revise]
+    body: |
+      # Spec review
+
+      Check every acceptance criterion traces to the ticket. Emit `revise`
+      with the gaps.
+  plan:
+    summary: Break the work into ordered steps.
+    model: claude-opus-5-5
+    body: |
+      # Plan
+
+      List the files to change and the order to change them in.
+  implement:
+    summary: Make the change on a branch.
+    uses: [github]
+    body: |
+      # Implement
+
+      Implement the plan. On a retry, fix only what the previous task reported.
+  test:
+    summary: Run the full test suite.
+    outcomes: [pass, fail]
+    uses: [github]
+    body: |
+      # Test
+
+      Run unit, integration and e2e tests. Emit `fail` with the failing output.
+  security-scan:
+    summary: Scan the diff for vulnerabilities and leaked secrets.
+    outcomes: [clean, findings]
+    uses: [github]
+    body: |
+      # Security scan
+
+      Run static analysis and a secret scan over the diff.
+  code-review:
+    summary: Review the diff for correctness and design.
+    model: claude-opus-5-5
+    outcomes: [approve, changes]
+    uses: [github]
+    body: |
+      # Code review
+
+      Review the diff as a senior engineer. Emit `changes` with inline comments.
+  merge:
+    summary: Squash-merge the pull request.
+    uses: [github]
+    body: |
+      # Merge
+
+      Squash-merge once checks are green.
+  deploy-staging:
+    summary: Deploy main to staging.
+    uses: [k8s]
+    body: |
+      # Deploy staging
+
+      Roll out the new image to staging and wait for it to be ready.
+  smoke-test:
+    summary: Run smoke tests against staging.
+    outcomes: [pass, fail]
+    body: |
+      # Smoke test
+
+      Hit the critical paths on staging.
+  rollback:
+    summary: Roll back the last deploy.
+    uses: [k8s, slack]
+    body: |
+      # Rollback
+
+      Restore the previous image and post the reason to the team channel.
+  deploy-prod:
+    summary: Deploy to production behind a canary.
+    uses: [k8s]
+    body: |
+      # Deploy prod
+
+      Roll out to 5% of traffic, then to all of it.
+  verify-prod:
+    summary: Watch error rates after the rollout.
+    outcomes: [healthy, degraded]
+    uses: [sentry]
+    body: |
+      # Verify prod
+
+      Compare error rates for 30 minutes against the previous release.
+  announce:
+    summary: Announce the release and close the ticket.
+    uses: [slack, linear]
+    body: |
+      # Announce
+
+      Post release notes and close the ticket.
+mcp:
+  github:
+    transport: http
+    tools: [create_pr, merge_pr, get_diff, run_workflow]
+  linear:
+    transport: http
+    tools: [get_issue, comment, close_issue]
+  sentry:
+    transport: http
+    tools: [search_issues, error_rate]
+  slack:
+    transport: http
+    tools: [post_message]
+  k8s:
+    transport: stdio
+    tools: "*"

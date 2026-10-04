@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>awf: {{.Title}}</title>
+<style>
+body { margin: 0; padding: 40px 16px; font: 15px/1.5 ui-sans-serif, -apple-system, system-ui, sans-serif; background: #f1f3f6; color: #16202b; }
+@media (prefers-color-scheme: dark) { body { background: #0e1217; color: #e4e8ee; } }
+main { max-width: 760px; margin: 0 auto; }
+h1 { font-size: 20px; margin: 0 0 6px; }
+p { margin: 0 0 16px; color: #8a5300; }
+pre { white-space: pre-wrap; font: 13px/1.5 ui-monospace, Menlo, monospace; padding: 14px; border-radius: 8px; background: rgba(127, 127, 127, .12); }
+</style>
+</head>
+<body>
+<main>
+<h1>{{.Title}}</h1>
+<p>{{.Hint}}</p>
+{{with .Detail}}<pre>{{.}}</pre>{{end}}
+</main>
+{{with .Live}}<script>new EventSource("{{.}}").onmessage = () => location.reload();</script>{{end}}
+</body>
+</html>

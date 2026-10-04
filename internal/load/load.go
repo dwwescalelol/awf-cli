@@ -11,55 +11,86 @@ import (
 	"github.com/dwwescalelol/awf-cli/internal/store"
 )
 
+type WorkflowFile struct {
+	Source   []byte
+	Doc      *manifest.Workflow
+	Compiled *awf.Workflow
+}
+
+type TaskFile struct {
+	Source []byte
+	Doc    *manifest.Task
+}
+
 func Task(path string) (*manifest.Task, error) {
-	data, err := os.ReadFile(path)
+	f, err := ReadTask(path)
 	if err != nil {
 		return nil, err
 	}
-	front, body, err := manifest.SplitTask(data)
-	if err != nil {
-		return nil, err
-	}
-	if err := schema.ValidateTask(front, body); err != nil {
-		return nil, err
-	}
-	return manifest.UnmarshalTask(data)
+	return f.Doc, nil
 }
 
 // Workflow reads a workflow, inlines its $ref tasks and compiles it. Relative
 // $ref paths resolve against the workflow's directory, and ids resolve in s.
 func Workflow(path string, s *store.Store) (*awf.Workflow, error) {
-	_, w, err := parse(path, s)
-	return w, err
+	f, err := ReadWorkflow(path, s)
+	if err != nil {
+		return nil, err
+	}
+	return f.Compiled, nil
 }
 
 // Document reads a workflow and inlines its $ref tasks, returning the
 // document only when it also compiles.
 func Document(path string, s *store.Store) (*manifest.Workflow, error) {
-	doc, _, err := parse(path, s)
-	return doc, err
-}
-
-func parse(path string, s *store.Store) (*manifest.Workflow, *awf.Workflow, error) {
-	doc, err := read(path)
+	f, err := ReadWorkflow(path, s)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	unresolved := bundle(doc, filepath.Dir(path), s)
-	w, err := compile(doc)
-	if err := errors.Join(unresolved, err); err != nil {
-		return nil, nil, err
-	}
-	return doc, w, nil
+	return f.Doc, nil
 }
 
-func read(path string) (*manifest.Workflow, error) {
+func ReadTask(path string) (*TaskFile, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := schema.Validate(data); err != nil {
+	f := &TaskFile{Source: data}
+	front, body, err := manifest.SplitTask(data)
+	if err != nil {
+		return f, err
+	}
+	invalid := schema.ValidateTask(front, body)
+	if f.Doc, err = manifest.UnmarshalTask(data); err != nil {
+		f.Doc = nil
+		if invalid == nil {
+			invalid = err
+		}
+	}
+	return f, invalid
+}
+
+func ReadWorkflow(path string, s *store.Store) (*WorkflowFile, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
 		return nil, err
 	}
-	return manifest.Unmarshal(data)
+	f := &WorkflowFile{Source: data}
+	_, invalid := schema.Validate(data)
+	if f.Doc, err = manifest.Unmarshal(data); err != nil {
+		f.Doc = nil
+		if invalid == nil {
+			invalid = err
+		}
+	}
+	if invalid != nil {
+		return f, invalid
+	}
+	unresolved := bundle(f.Doc, filepath.Dir(path), s)
+	w, err := compile(f.Doc)
+	if err := errors.Join(unresolved, err); err != nil {
+		return f, err
+	}
+	f.Compiled = w
+	return f, nil
 }

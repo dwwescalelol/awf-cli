@@ -41,6 +41,13 @@ var (
 
 func (k DocumentKind) String() string { return k.name }
 
+func KindOf(path string) DocumentKind {
+	if filepath.Ext(path) == Task.ext {
+		return Task
+	}
+	return Workflow
+}
+
 type ID string
 
 var idPattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)

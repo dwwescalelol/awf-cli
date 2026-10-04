@@ -1,0 +1,17 @@
+openawf: 0.1.0
+name: feat-dev
+summary: What this workflow does.
+version: 0.1.0
+sha: null
+start: start
+orchestration:
+  start: null
+tasks:
+  start:
+    version: 0.1.0
+    sha: null
+    summary: What this task does.
+    body: |
+      # start
+      
+      Describe the work this task performs, and what it returns.

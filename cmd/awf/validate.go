@@ -3,66 +3,137 @@ package main
 import (
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"strings"
-	"text/tabwriter"
 
-	"github.com/dwwescalelol/awf-cli/internal/validate"
+	"github.com/dwwescalelol/awf-cli/internal/load"
+	"github.com/dwwescalelol/awf-cli/internal/store"
+	"github.com/dwwescalelol/awf-cli/internal/version"
 	"github.com/spf13/cobra"
 )
 
-type report struct {
-	path   string
-	result validate.Result
-}
-
-var errInvalid = errors.New("document is not valid")
-
-func newValidate() *cobra.Command {
-	var strict bool
-
+func validateCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "validate <path>",
-		Short: "Check a workflow document against the OpenAWF spec",
-		Args:  cobra.ExactArgs(1),
+		Use:   "validate ([-t] <id>[@<version>] | -f <path>)",
+		Short: "Check a workflow or task document against the OpenAWF spec",
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			r, err := validateFile(args[0], strict)
+			global, _ := cmd.Flags().GetBool("global")
+			file, _ := cmd.Flags().GetString("file")
+			task, _ := cmd.Flags().GetBool("task")
+
+			path, warnings, err := validate(args, file, task, global)
 			if err != nil {
 				return err
 			}
-			printReport(cmd.OutOrStdout(), r)
-			if r.result.Failed() {
-				return errInvalid
+			fmt.Println(formatValid(path))
+			if len(warnings) > 0 {
+				fmt.Fprintln(os.Stderr, formatWarnings(warnings))
 			}
 			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&strict, "strict", false, "treat warnings as errors")
+	cmd.Flags().Bool("global", false, "act on the global store: $AWF_HOME, or ~/.awf when unset")
+	cmd.Flags().StringP("file", "f", "", "path to a document file, a task when it ends in .md")
+	cmd.Flags().BoolP("task", "t", false, "validate a task by id")
 	return cmd
 }
 
-func validateFile(path string, strict bool) (report, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return report{}, err
+func formatValid(path string) string { return path + "\nvalid" }
+
+func formatErr(err error) string { return err.Error() }
+
+func formatWarnings(warnings []error) string {
+	lines := make([]string, 0, len(warnings))
+	for _, w := range warnings {
+		lines = append(lines, "warning: "+w.Error())
 	}
-	return report{path: path, result: validate.Document(data, strict)}, nil
+	return strings.Join(lines, "\n")
 }
 
-func printReport(out io.Writer, r report) {
-	fmt.Fprintln(out, r.path)
-	if len(r.result.Unresolved) > 0 {
-		fmt.Fprintf(out, "unbundled $ref tasks, their outcomes and uses are unchecked: %s\n",
-			strings.Join(r.result.Unresolved, ", "))
+var (
+	errWrongName    = errors.New("name does not match the id it is stored under")
+	errWrongVersion = errors.New("version does not match the version it is stored under")
+)
+
+type stored struct {
+	id      store.ID
+	version version.Version
+}
+
+func validate(args []string, file string, task, global bool) (string, []error, error) {
+	kind := store.Workflow
+	if task || strings.HasSuffix(file, ".md") {
+		kind = store.Task
 	}
-	if len(r.result.Diagnostics) == 0 {
-		fmt.Fprintln(out, "valid")
-		return
+	path, at, err := target(kind, args, file, global)
+	if err != nil {
+		return "", nil, err
 	}
-	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	for _, d := range r.result.Diagnostics {
-		fmt.Fprintf(w, "%s\t%s\t%s\n", d.Severity, d.Path, d.Message)
+	if kind == store.Task {
+		t, err := load.Task(path)
+		if err != nil {
+			return path, nil, err
+		}
+		return path, nil, at.check("", t.Version)
 	}
-	w.Flush()
+	w, err := load.Workflow(path)
+	if err != nil {
+		return path, nil, err
+	}
+	return path, w.Warnings(), at.check(w.Name, w.Version)
+}
+
+func (at *stored) check(name string, v version.Version) error {
+	if at == nil {
+		return nil
+	}
+	var errs []error
+	if name != "" && name != at.id.String() {
+		errs = append(errs, fmt.Errorf("name %q, stored as %q: %w", name, at.id, errWrongName))
+	}
+	if v.Compare(at.version) != 0 {
+		errs = append(errs, fmt.Errorf("version %s, stored as %s: %w", v, at.version, errWrongVersion))
+	}
+	return errors.Join(errs...)
+}
+
+func target(kind store.DocumentKind, args []string, file string, global bool) (string, *stored, error) {
+	if file == "" && len(args) == 0 {
+		return "", nil, errors.New("give an id or -f")
+	}
+	if file != "" && len(args) > 0 {
+		return "", nil, errors.New("give an id or -f, not both")
+	}
+	if file != "" {
+		return file, nil, nil
+	}
+
+	scope, err := store.Resolve(global)
+	if err != nil {
+		return "", nil, err
+	}
+	return locate(scope, kind, args[0])
+}
+
+func locate(scope *store.Store, kind store.DocumentKind, ref string) (string, *stored, error) {
+	name, pin, pinned := strings.Cut(ref, "@")
+	id, err := store.NewID(name)
+	if err != nil {
+		return "", nil, err
+	}
+	var v version.Version
+	if pinned {
+		v, err = version.Parse(pin)
+	} else {
+		v, err = scope.Latest(kind, id)
+	}
+	if err != nil {
+		return "", nil, err
+	}
+	path, err := scope.Find(kind, id, v)
+	if err != nil {
+		return "", nil, err
+	}
+	return path, &stored{id: id, version: v}, nil
 }

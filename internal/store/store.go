@@ -1,138 +1,270 @@
-// Package store locates the .awf directories a command reads and writes.
 package store
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strings"
+
+	"github.com/dwwescalelol/awf-cli/internal/version"
 )
-
-const dirName = ".awf"
-
-// Kind is a document tree inside a scope. The value is the directory name.
-type Kind string
 
 const (
-	Workflow Kind = "wf"
-	Task     Kind = "task"
+	EnvHome  = "AWF_HOME"
+	dirName  = ".awf"
+	dirPerm  = 0o755
+	filePerm = 0o644
 )
 
-func (k Kind) String() string {
-	switch k {
-	case Workflow:
-		return "workflow"
-	case Task:
-		return "task"
-	}
-	return string(k)
+var (
+	ErrNotAnID      = errors.New("not an id")
+	ErrNotADocument = errors.New("not a document file")
+	ErrNestedDir    = errors.New("unexpected directory")
+	ErrNotInstalled = errors.New("not installed")
+	ErrExists       = errors.New("already exists")
+)
+
+type DocumentKind struct {
+	dir  string
+	ext  string
+	name string
 }
 
-func (k Kind) ext() string {
-	switch k {
-	case Workflow:
-		return ".yaml"
-	case Task:
-		return ".md"
+var (
+	Workflow = DocumentKind{dir: "wf", ext: ".yaml", name: "workflow"}
+	Task     = DocumentKind{dir: "task", ext: ".md", name: "task"}
+)
+
+func (k DocumentKind) String() string { return k.name }
+
+type ID string
+
+var idPattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+
+func NewID(s string) (ID, error) {
+	if !idPattern.MatchString(s) {
+		return "", fmt.Errorf("%q: %w", s, ErrNotAnID)
 	}
-	return ""
+	return ID(s), nil
 }
 
-// Scope is one .awf directory.
-type Scope struct {
-	Dir string
+func (id ID) String() string { return string(id) }
+
+type Document struct {
+	ID       ID
+	Versions []version.Version
 }
 
-// Resolve returns the scope to act on.
-func Resolve(global bool) (Scope, error) {
-	if global {
-		return globalScope()
+type Skipped struct {
+	Path   string
+	Reason error
+}
+
+func (sk Skipped) String() string { return fmt.Sprintf("%s: %v", sk.Path, sk.Reason) }
+
+func GlobalDir() (string, error) {
+	if dir := os.Getenv(EnvHome); dir != "" {
+		return dir, nil
 	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, dirName), nil
+}
+
+func FindDir() (string, error) {
 	dir, err := os.Getwd()
 	if err != nil {
-		return Scope{}, err
+		return "", err
+	}
+	if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = resolved
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	if resolved, err := filepath.EvalSymlinks(home); err == nil {
+		home = resolved
 	}
 	for {
-		if isDir(filepath.Join(dir, dirName)) {
-			return Scope{Dir: filepath.Join(dir, dirName)}, nil
+		if dir == home {
+			return GlobalDir()
+		}
+		candidate := filepath.Join(dir, dirName)
+		if isDir(candidate) {
+			return candidate, nil
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			return globalScope()
+			return GlobalDir()
 		}
 		dir = parent
 	}
 }
 
-func globalScope() (Scope, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return Scope{}, err
-	}
-	return Scope{Dir: filepath.Join(home, dirName)}, nil
-}
-
-func (s Scope) Path(kind Kind, id, version string) string {
-	return filepath.Join(s.Dir, string(kind), id, version+kind.ext())
-}
-
-// Mkdir makes the directory Path writes into. Scopes appear on first write.
-func (s Scope) Mkdir(kind Kind, id string) error {
-	return os.MkdirAll(filepath.Join(s.Dir, string(kind), id), 0o755)
-}
-
-// Entry is an id and the versions stored under it.
-type Entry struct {
-	ID       string
-	Versions []string
-}
-
-// List reports what a scope holds. A scope that has never been written to
-// holds nothing, which is not an error.
-func (s Scope) List(kind Kind) ([]Entry, error) {
-	ids, err := os.ReadDir(filepath.Join(s.Dir, string(kind)))
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	// os.ReadDir sorts by filename, so both ids and versions come out in a
-	// stable order.
-	var entries []Entry
-	for _, id := range ids {
-		if !id.IsDir() {
-			continue
-		}
-		versions, err := s.versions(kind, id.Name())
-		if err != nil {
-			return nil, err
-		}
-		if len(versions) > 0 {
-			entries = append(entries, Entry{ID: id.Name(), Versions: versions})
-		}
-	}
-	return entries, nil
-}
-
-func (s Scope) versions(kind Kind, id string) ([]string, error) {
-	files, err := os.ReadDir(filepath.Join(s.Dir, string(kind), id))
-	if err != nil {
-		return nil, err
-	}
-	var versions []string
-	for _, f := range files {
-		name := f.Name()
-		if f.IsDir() || !strings.HasSuffix(name, kind.ext()) {
-			continue
-		}
-		versions = append(versions, strings.TrimSuffix(name, kind.ext()))
-	}
-	return versions, nil
-}
-
 func isDir(path string) bool {
 	fi, err := os.Stat(path)
 	return err == nil && fi.IsDir()
+}
+
+type Store struct {
+	dir string
+}
+
+func New(dir string) *Store { return &Store{dir: dir} }
+
+func Resolve(global bool) (*Store, error) {
+	locate := FindDir
+	if global {
+		locate = GlobalDir
+	}
+	dir, err := locate()
+	if err != nil {
+		return nil, err
+	}
+	return New(dir), nil
+}
+
+func (s *Store) Dir() string { return s.dir }
+
+func (s *Store) kindDir(kind DocumentKind) string {
+	return filepath.Join(s.dir, kind.dir)
+}
+
+func (s *Store) docDir(kind DocumentKind, id ID) string {
+	return filepath.Join(s.kindDir(kind), string(id))
+}
+
+func (s *Store) Path(kind DocumentKind, id ID, v version.Version) string {
+	return filepath.Join(s.docDir(kind, id), v.String()+kind.ext)
+}
+
+func (s *Store) Find(kind DocumentKind, id ID, v version.Version) (string, error) {
+	path := s.Path(kind, id, v)
+	fi, err := os.Stat(path)
+	if err == nil && !fi.IsDir() {
+		return path, nil
+	}
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return "", err
+	}
+	return "", fmt.Errorf("%s %q version %s in %s: %w", kind, id, v, s.dir, ErrNotInstalled)
+}
+
+func (s *Store) Latest(kind DocumentKind, id ID) (version.Version, error) {
+	versions, _, err := s.versions(kind, id)
+	if err != nil {
+		return version.Version{}, err
+	}
+	if len(versions) == 0 {
+		return version.Version{}, fmt.Errorf("%s %q in %s: %w", kind, id, s.dir, ErrNotInstalled)
+	}
+	return slices.MaxFunc(versions, version.Version.Compare), nil
+}
+
+func (s *Store) Read(kind DocumentKind, id ID, v version.Version) ([]byte, error) {
+	path, err := s.Find(kind, id, v)
+	if err != nil {
+		return nil, err
+	}
+	return os.ReadFile(path)
+}
+
+func (s *Store) Write(kind DocumentKind, id ID, v version.Version, data []byte) error {
+	if err := os.MkdirAll(s.docDir(kind, id), dirPerm); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(s.Path(kind, id, v), os.O_WRONLY|os.O_CREATE|os.O_EXCL, filePerm)
+	if errors.Is(err, fs.ErrExist) {
+		return fmt.Errorf("%s %q version %s in %s: %w", kind, id, v, s.dir, ErrExists)
+	}
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return err
+	}
+	return f.Close()
+}
+
+func (s *Store) List(kind DocumentKind) ([]Document, []Skipped, error) {
+	root := s.kindDir(kind)
+	entries, err := os.ReadDir(root)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil, nil
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var documents []Document
+	var skipped []Skipped
+	for _, entry := range entries {
+		name := entry.Name()
+		if strings.HasPrefix(name, ".") {
+			continue
+		}
+		path := filepath.Join(root, name)
+		if !entry.IsDir() {
+			skipped = append(skipped, Skipped{Path: path, Reason: ErrNotADocument})
+			continue
+		}
+		id, err := NewID(name)
+		if err != nil {
+			skipped = append(skipped, Skipped{Path: path, Reason: ErrNotAnID})
+			continue
+		}
+		versions, versionSkipped, err := s.versions(kind, id)
+		if err != nil {
+			return nil, nil, err
+		}
+		skipped = append(skipped, versionSkipped...)
+		if len(versions) > 0 {
+			documents = append(documents, Document{ID: id, Versions: versions})
+		}
+	}
+	return documents, skipped, nil
+}
+
+func (s *Store) versions(kind DocumentKind, id ID) ([]version.Version, []Skipped, error) {
+	root := s.docDir(kind, id)
+	entries, err := os.ReadDir(root)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil, nil
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var versions []version.Version
+	var skipped []Skipped
+	for _, entry := range entries {
+		name := entry.Name()
+		if strings.HasPrefix(name, ".") {
+			continue
+		}
+		path := filepath.Join(root, name)
+		switch {
+		case entry.IsDir():
+			skipped = append(skipped, Skipped{Path: path, Reason: ErrNestedDir})
+		case !strings.HasSuffix(name, kind.ext):
+			skipped = append(skipped, Skipped{Path: path, Reason: ErrNotADocument})
+		default:
+			v, err := version.Parse(strings.TrimSuffix(name, kind.ext))
+			if err != nil {
+				skipped = append(skipped, Skipped{Path: path, Reason: err})
+				continue
+			}
+			versions = append(versions, v)
+		}
+	}
+	slices.SortFunc(versions, version.Version.Compare)
+	return versions, skipped, nil
 }

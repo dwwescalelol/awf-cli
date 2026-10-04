@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"io"
+	"os"
 	"strings"
 	"text/tabwriter"
 
@@ -10,65 +10,109 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type listing struct {
-	dir  string
-	rows []row
-}
-
-type row struct {
-	kind     store.Kind
-	id       string
-	versions []string
-}
-
-func newLs() *cobra.Command {
-	var global bool
-
+func lsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ls",
 		Short: "List the workflows and tasks in scope",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			l, err := list(global)
+			global, _ := cmd.Flags().GetBool("global")
+			onlyWorkflows, _ := cmd.Flags().GetBool("wf")
+			onlyTasks, _ := cmd.Flags().GetBool("task")
+
+			c, err := list(onlyWorkflows, onlyTasks, global)
 			if err != nil {
 				return err
 			}
-			printListing(cmd.OutOrStdout(), l)
+			fmt.Println(formatListing(c))
+			if warnings := formatSkipped(c); warnings != "" {
+				fmt.Fprintln(os.Stderr, warnings)
+			}
 			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&global, "global", false, "act on ~/.awf")
+	cmd.Flags().Bool("global", false, "act on the global store: $AWF_HOME, or ~/.awf when unset")
+	cmd.Flags().BoolP("wf", "w", false, "list workflows only")
+	cmd.Flags().BoolP("task", "t", false, "list tasks only")
 	return cmd
 }
 
-func list(global bool) (listing, error) {
-	scope, err := store.Resolve(global)
-	if err != nil {
-		return listing{}, err
+func selected(workflows, tasks bool) []store.DocumentKind {
+	if !workflows && !tasks {
+		return []store.DocumentKind{store.Workflow, store.Task}
 	}
-
-	l := listing{dir: scope.Dir}
-	for _, kind := range []store.Kind{store.Workflow, store.Task} {
-		entries, err := scope.List(kind)
-		if err != nil {
-			return listing{}, err
-		}
-		for _, e := range entries {
-			l.rows = append(l.rows, row{kind: kind, id: e.ID, versions: e.Versions})
-		}
+	kinds := make([]store.DocumentKind, 0, 2)
+	if workflows {
+		kinds = append(kinds, store.Workflow)
 	}
-	return l, nil
+	if tasks {
+		kinds = append(kinds, store.Task)
+	}
+	return kinds
 }
 
-func printListing(out io.Writer, l listing) {
-	fmt.Fprintln(out, l.dir)
-	if len(l.rows) == 0 {
-		fmt.Fprintln(out, "empty")
-		return
+type listing struct {
+	documents []store.Document
+	skipped   []store.Skipped
+}
+
+type contents struct {
+	dir      string
+	kinds    []store.DocumentKind
+	listings map[store.DocumentKind]listing
+}
+
+func list(onlyWorkflows, onlyTasks, global bool) (contents, error) {
+	scope, err := store.Resolve(global)
+	if err != nil {
+		return contents{}, err
 	}
-	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	for _, r := range l.rows {
-		fmt.Fprintf(w, "%s\t%s\t%s\n", r.kind, r.id, strings.Join(r.versions, ", "))
+	kinds := selected(onlyWorkflows, onlyTasks)
+	listings := make(map[store.DocumentKind]listing, len(kinds))
+	for _, kind := range kinds {
+		documents, skipped, err := scope.List(kind)
+		if err != nil {
+			return contents{}, err
+		}
+		listings[kind] = listing{documents: documents, skipped: skipped}
+	}
+	return contents{dir: scope.Dir(), kinds: kinds, listings: listings}, nil
+}
+
+func formatListing(c contents) string {
+	var b strings.Builder
+	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
+	for _, kind := range c.kinds {
+		for _, d := range c.listings[kind].documents {
+			if len(c.kinds) > 1 {
+				fmt.Fprintf(w, "%s\t", kind)
+			}
+			fmt.Fprintf(w, "%s\t%s\n", d.ID, versions(d))
+		}
 	}
 	w.Flush()
+
+	out := c.dir + "\nempty"
+	if b.Len() > 0 {
+		out = c.dir + "\n" + strings.TrimRight(b.String(), "\n")
+	}
+	return out
+}
+
+func formatSkipped(c contents) string {
+	var lines []string
+	for _, kind := range c.kinds {
+		for _, sk := range c.listings[kind].skipped {
+			lines = append(lines, "warning: "+sk.String())
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+func versions(d store.Document) string {
+	out := make([]string, 0, len(d.Versions))
+	for _, v := range d.Versions {
+		out = append(out, v.String())
+	}
+	return strings.Join(out, ", ")
 }

@@ -38,8 +38,12 @@ A task file is a fragment, not a document. The spec's "YAML or JSON" line covers
 | `bundle` | inline external `$ref`s into `tasks` |
 | `extract` | split `tasks` to `.md` files, replace with `$ref`s |
 | `new` | create a workflow or task in scope, unsealed — a new id, or a new version of one |
-| `install` | fetch from github/gitlab/bitbucket over HTTPS; workflow or task detected from content |
-| `ls` | installed workflows, or one workflow's tasks + versions |
+| `install` | fetch a document from a git remote by `<id>@<version>` |
+| `publish` | commit, tag and push a sealed document to a git remote |
+| `propose` | push a change to a review branch and open it for review |
+| `remote` | `init` a remote's layout; `ls`, `render`, `diff` its contents and proposals |
+| `ls` | installed workflows and tasks in scope |
+| `describe` | print one document's header, tasks, orchestration and mcp |
 | `render` | swagger-style HTML, serves on localhost (`--out` for a file) |
 | `run` | execute the FSM, live TUI view |
 | `-v` | CLI version |
@@ -77,7 +81,7 @@ Canonical form: **bundle → YAML to JSON → JCS (RFC 8785) → sha256**.
 
 Bundling first is what makes it work. Hashing the document as written would hash a `$ref` string rather than the task content, so `bundle` and `extract` would change the hash of a semantically identical workflow and break `seal`/`verify` across the pair. Bundling first makes them hash-neutral.
 
-Excluded from the hash: `sha` itself, and `x-meta` (declared ignored by execution).
+Excluded from the hash: `sha` itself and the version. The version is a mutable label until its tag is pushed, so including it would change the sha of unchanged content. Two versions with identical content therefore share a sha, and sha to `id@version` is one-to-many.
 
 Tasks hash the same way — frontmatter + `body` as one canonical JSON object.
 
@@ -113,7 +117,57 @@ Noun subcommand, not a flag. `install` detects type from content; `new` has no c
 
 Editing a sealed document is a validate **error**, not a warning: the sha cannot match.
 
-No `publish` command. `new` already writes to the right path and `seal` already bundles, validates, and hashes — so publishing is `seal`, then push the file yourself. Nothing in the tool touches git.
+`seal` is a precondition of `publish`, not a replacement for it. `publish` commits, tags and pushes; see `remotes`.
+
+## describe
+
+Opens one document and prints it. Noun subcommand, because the output differs by kind.
+
+```
+awf describe workflow feat-dev
+```
+
+```
+feat-dev 0.2.0    draft
+model    opus
+start    plan
+
+tasks
+  plan    0.1.0  opus
+  review  0.1.0  sonnet   ok, fail   fs, gh
+  ship    0.1.0  opus     $ref ./ship.md
+
+orchestration
+  plan    -> review
+  review  ok   -> ship
+          fail -> plan
+  ship    end
+
+mcp
+  fs  stdio  *
+  gh  http   create_pr, list_issues
+```
+
+```
+awf describe task create-diff
+```
+
+```
+create-diff 0.1.0    draft
+model    opus
+outcomes ok, fail
+uses     fs, gh
+
+input    {branch: string}
+output   {diff: string}
+
+summary  Produce a diff for the branch.
+
+---
+# create-diff
+
+Describe the work this task performs, and what it returns.
+```
 
 ## Layout
 
@@ -134,29 +188,25 @@ Namespacing (`author@wf-name`) deferred. Worth reserving `@` in ids now so it st
 ## install
 
 ```
-awf install github.com/zaz/flows/feat-dev.yaml@v0.3.0
-awf install github.com/zaz/flows/tasks/create-diff.md
+awf install github.com/zaz/flows feat-dev@0.3.0
+awf install github.com/zaz/flows tasks/create-diff@0.1.0
 ```
+
+Git plumbing only, no HTTPS raw fetch, no host API, no registry. Resolution is one `git ls-remote` globbing `refs/tags/awf/*/<id>/v<version>`, then a fetch of that commit and a `cat-file` of the blob. Identical on GitHub, GitLab, Bitbucket and a bare repo on a fileshare.
+
+Zero matches is not found. One match recovers the docType from the tag. Two or more is ambiguous and the user must qualify with `<docType>/<id>@<version>`.
 
 Workflow or task is detected from content, not a flag: a workflow has `openawf` and `orchestration` at the top level; a task is frontmatter + body with no `openawf`. Extension is a hint only. Neither shape is a validate error. Both land in scope; a task installed alone is referencable by `$ref` from any local workflow.
 
-Plain HTTPS GET, no git protocol, no registry.
+On landing: fetch → validate → write to scope. No lockfile. The version is in the coordinate and the `sha` is in the document.
 
-| host | raw form |
-|---|---|
-| github | `raw.githubusercontent.com/{u}/{r}/{ref}/{path}` |
-| gitlab | `gitlab.com/{u}/{r}/-/raw/{ref}/{path}` |
-| bitbucket | `bitbucket.org/{u}/{r}/raw/{ref}/{path}` |
-
-Anything else is treated as a literal URL. `@ref` fills `{ref}` — tag, branch, or commit. On landing: fetch → validate → write to scope. No lockfile — the version is in the path and the `sha` is in the document.
-
-Private repos need credentials from `git credential fill`. Not v1.
+Private repos use the user's existing git credentials.
 
 ## Versioning
 
 Exact pins only. No semver ranges, no solver — tasks are leaves, so there is no diamond problem.
 
-No lockfile. The point of versioning is provenance: `run` stamps the workflow version, every task version, and their shas into the run record. That is the README's traceability principle.
+No lockfile. The point of versioning is provenance, and the sha is its key, not the version: a version is a mutable label until its tag exists, so a document can be run locally and renumbered before publish. `run` stamps the sha of the workflow and of every task that ran into the run record, carrying versions alongside them. A document with `sha: null` is unsealed and has no provenance.
 
 ## TUI
 

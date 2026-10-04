@@ -3,11 +3,24 @@ package main
 import (
 	"fmt"
 	"os"
+
+	"github.com/dwwescalelol/awf-cli/internal/version"
+	"github.com/spf13/cobra"
 )
 
 func main() {
-	if err := newRoot().Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, "awf:", err)
+	root := &cobra.Command{
+		Use:           "awf",
+		Short:         "Operate on OpenAWF workflow documents",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		Version:       version.CLI,
+	}
+	root.SetVersionTemplate("awf {{.Version}}\n")
+	root.AddCommand(lsCmd(), newCmd(), validateCmd())
+
+	if err := root.Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, formatErr(err))
 		os.Exit(1)
 	}
 }

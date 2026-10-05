@@ -104,13 +104,13 @@ func writePage(page []byte) (string, error) {
 	return (&url.URL{Scheme: "file", Path: path}).String(), nil
 }
 
-func renderWorkflow(w io.Writer, path string, s *store.Store, at *stored, scope render.Scope, live string) error {
+func renderWorkflow(w io.Writer, path string, s *store.Store, at *store.Entry, scope render.Scope, live string) error {
 	f, err := load.ReadWorkflow(path, s)
 	if f == nil {
 		return err
 	}
 	if err == nil {
-		err = at.check(f.Doc.Name, f.Doc.Version)
+		err = at.Check(f.Doc.Name, f.Doc.Version)
 	}
 	if err != nil {
 		return invalid(w, path, render.WorkflowHeader(fileName(path), f.Doc), f.Source, err, scope, live)
@@ -118,17 +118,17 @@ func renderWorkflow(w io.Writer, path string, s *store.Store, at *stored, scope 
 	return render.Workflow(w, path, f.Source, f.Doc, f.Compiled, scope, live)
 }
 
-func renderTask(w io.Writer, path string, at *stored) error {
+func renderTask(w io.Writer, path string, at *store.Entry) error {
 	name := fileName(path)
 	if at != nil {
-		name = at.id.String()
+		name = at.ID.String()
 	}
 	f, err := load.ReadTask(path)
 	if f == nil {
 		return err
 	}
 	if err == nil {
-		err = at.check("", f.Doc.Version)
+		err = at.Check("", f.Doc.Version)
 	}
 	if err != nil {
 		return invalid(w, path, render.TaskHeader(name, f.Doc), f.Source, err, render.Scope{}, "")

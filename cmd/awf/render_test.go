@@ -68,7 +68,7 @@ func TestRenderInvalid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	scope, _, err := links(s, stored{id: "deploy", version: good.version})
+	scope, _, err := links(s, &store.Entry{ID: "deploy", Version: good.version})
 	if err != nil {
 		t.Fatalf("a malformed sibling failed the listing: %v", err)
 	}

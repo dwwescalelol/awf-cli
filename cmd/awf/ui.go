@@ -132,34 +132,34 @@ func (srv *server) home(w http.ResponseWriter, r *http.Request) {
 }
 
 func (srv *server) workflow(w http.ResponseWriter, r *http.Request) {
-	path, at, err := find(srv.store, r)
+	at, err := locate(srv.store, store.Workflow, r.PathValue("id")+"@"+r.PathValue("version"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	live := workflowURL(at.id, at.version) + "/events"
+	live := workflowURL(at.ID, at.Version) + "/events"
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 
 	scope, skipped, err := links(srv.store, at)
 	srv.warn(skipped)
 	if err == nil {
-		err = renderWorkflow(w, path, srv.store, &at, scope, live)
+		err = renderWorkflow(w, at.Path, srv.store, at, scope, live)
 	}
 	if err == nil || errors.Is(err, errInvalid) {
 		return
 	}
 	w.WriteHeader(http.StatusInternalServerError)
-	render.Message(w, "This workflow does not render", "Fix the file and the page reloads.", path+"\n\n"+err.Error(), live)
+	render.Message(w, "This workflow does not render", "Fix the file and the page reloads.", at.Path+"\n\n"+err.Error(), live)
 }
 
 func (srv *server) events(w http.ResponseWriter, r *http.Request) {
-	path, _, err := find(srv.store, r)
+	at, err := locate(srv.store, store.Workflow, r.PathValue("id")+"@"+r.PathValue("version"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	watch(w, r, path)
+	watch(w, r, at.Path)
 }
 
 func (srv *server) warn(skipped []store.Skipped) {
@@ -177,7 +177,7 @@ func workflowURL(id store.ID, v version.Version) string {
 	return "/wf/" + id.String() + "/" + v.String()
 }
 
-func links(s *store.Store, current stored) (render.Scope, []store.Skipped, error) {
+func links(s *store.Store, current *store.Entry) (render.Scope, []store.Skipped, error) {
 	documents, skipped, err := s.List(store.Workflow)
 	if err != nil {
 		return render.Scope{}, skipped, err
@@ -187,10 +187,10 @@ func links(s *store.Store, current stored) (render.Scope, []store.Skipped, error
 		scope.Workflows = append(scope.Workflows, render.Link{
 			Label:   d.ID.String(),
 			URL:     workflowURL(d.ID, d.Versions[len(d.Versions)-1]),
-			Current: d.ID == current.id,
+			Current: d.ID == current.ID,
 			Count:   len(d.Versions),
 		})
-		if d.ID != current.id {
+		if d.ID != current.ID {
 			continue
 		}
 		for i, v := range slices.Backward(d.Versions) {
@@ -198,7 +198,7 @@ func links(s *store.Store, current stored) (render.Scope, []store.Skipped, error
 			scope.Versions = append(scope.Versions, render.Link{
 				Label:   v.String(),
 				URL:     workflowURL(d.ID, v),
-				Current: v.Compare(current.version) == 0,
+				Current: v.Compare(current.Version) == 0,
 				Latest:  i == len(d.Versions)-1,
 				Sealed:  sealed,
 				Invalid: err != nil,
@@ -218,22 +218,6 @@ func status(s *store.Store, id store.ID, v version.Version) (bool, error) {
 		return false, err
 	}
 	return f.Doc.SHA != nil, nil
-}
-
-func find(s *store.Store, r *http.Request) (string, stored, error) {
-	id, err := store.NewID(r.PathValue("id"))
-	if err != nil {
-		return "", stored{}, err
-	}
-	v, err := version.Parse(r.PathValue("version"))
-	if err != nil {
-		return "", stored{}, err
-	}
-	path, err := s.Find(store.Workflow, id, v)
-	if err != nil {
-		return "", stored{}, err
-	}
-	return path, stored{id: id, version: v}, nil
 }
 
 func watch(w http.ResponseWriter, r *http.Request, path string) {

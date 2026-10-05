@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dwwescalelol/awf-cli/internal/load"
 	"github.com/dwwescalelol/awf-cli/internal/manifest"
 	"github.com/dwwescalelol/awf-cli/internal/store"
 )
@@ -67,37 +68,46 @@ func TestBundle(t *testing.T) {
 
 func TestBundleOut(t *testing.T) {
 	root := project(t)
+	if _, err := create(store.Workflow, "deploy", "", false); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(root, "out.yaml")
+	data, err := bundle([]string{"deploy"}, "", out, false)
+	if err != nil {
+		t.Fatalf("bundle: %v", err)
+	}
+	got, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(data) {
+		t.Errorf("got:\n%s\nwant:\n%s", got, data)
+	}
+}
+
+func TestBundlePinMismatch(t *testing.T) {
+	project(t)
+	task, err := create(store.Task, "build", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rewrite(t, task.path, "version: 0.1.0", "version: 9.9.9")
 	wf, err := create(store.Workflow, "deploy", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	loose := filepath.Join(root, "loose.yaml")
+	rewrite(t, wf.path, "start: start", "start: build")
+	rewrite(t, wf.path, "  start: null", "  build: null")
 	data, err := os.ReadFile(wf.path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(loose, data, 0o644); err != nil {
+	head, _, _ := strings.Cut(string(data), "tasks:")
+	if err := os.WriteFile(wf.path, []byte(head+"tasks:\n  build:\n    $ref: build@0.1.0\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-
-	tests := []struct {
-		name string
-		args []string
-		file string
-		out  string
-		want error
-	}{
-		{name: "stored input", args: []string{"deploy"}, out: wf.path, want: errOutIsInput},
-		{name: "file input", file: loose, out: loose, want: errOutIsInput},
-		{name: "into store", file: loose, out: filepath.Join(root, ".awf", "wf", "deploy", "0.2.0.yaml"), want: errOutInStore},
-		{name: "outside", args: []string{"deploy"}, out: filepath.Join(root, "out.yaml")},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if _, err := bundle(tt.args, tt.file, tt.out, false); !errors.Is(err, tt.want) {
-				t.Errorf("got %v, want %v", err, tt.want)
-			}
-		})
+	if _, err := bundle([]string{"deploy"}, "", "", false); !errors.Is(err, store.ErrWrongVersion) {
+		t.Errorf("got %v, want %v", err, store.ErrWrongVersion)
 	}
 }
 
@@ -108,7 +118,7 @@ func TestBundleRejectsInvalidGraph(t *testing.T) {
 	if err := os.WriteFile(path, []byte(doc), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := bundle(nil, path, "", false); err == nil {
-		t.Error("edge to an undefined task: got no error")
+	if _, err := bundle(nil, path, "", false); !errors.Is(err, load.ErrNotATask) {
+		t.Errorf("got %v, want %v", err, load.ErrNotATask)
 	}
 }

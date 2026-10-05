@@ -24,7 +24,7 @@ func TestTaskRoundTrip(t *testing.T) {
 	if task.SHA != nil {
 		t.Errorf("sha: got %q, want null", *task.SHA)
 	}
-	if want := "# create-diff\n\nDescribe the work this task performs, and what it returns.\n"; task.Body != want {
+	if want := "# create-diff\n\nDescribe the work this task performs, and what it returns.\n"; string(task.Body) != want {
 		t.Errorf("body: got %q, want %q", task.Body, want)
 	}
 	got, err := MarshalTask(task)
@@ -74,5 +74,20 @@ func TestWorkflowRoundTrip(t *testing.T) {
 	}
 	if string(got) != string(data) {
 		t.Errorf("round trip:\ngot:\n%s\nwant:\n%s", got, data)
+	}
+}
+
+func TestMarshalIndentedBody(t *testing.T) {
+	wf := &Workflow{Name: "x", Start: "a", Orchestration: Orchestration{"a": Transition{}}, Tasks: Tasks{"a": TaskEntry{Task: &Task{Body: "  indented\nnext\n"}}}}
+	data, err := Marshal(wf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := Unmarshal(data)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if body := got.Tasks["a"].Task.Body; body != wf.Tasks["a"].Task.Body {
+		t.Errorf("got %q, want %q", body, wf.Tasks["a"].Task.Body)
 	}
 }

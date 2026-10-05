@@ -2,7 +2,9 @@ package manifest
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
+	"strings"
 
 	"github.com/goccy/go-yaml"
 )
@@ -35,7 +37,7 @@ func UnmarshalTask(data []byte) (*Task, error) {
 	if err := yaml.Unmarshal(front, &t); err != nil {
 		return nil, err
 	}
-	t.Body = body
+	t.Body = Body(body)
 	return &t, nil
 }
 
@@ -52,6 +54,17 @@ func MarshalTask(t *Task) ([]byte, error) {
 	b.Write(data)
 	b.WriteString(fence)
 	b.WriteString("\n")
-	b.WriteString(t.Body)
+	b.WriteString(string(t.Body))
 	return b.Bytes(), nil
+}
+
+type Body string
+
+func (b Body) MarshalYAML() (any, error) {
+	first := strings.TrimLeft(string(b), "\n")
+	if strings.HasPrefix(first, " ") || strings.HasPrefix(first, "\t") {
+		quoted, err := json.Marshal(string(b))
+		return yaml.RawMessage(quoted), err
+	}
+	return string(b), nil
 }

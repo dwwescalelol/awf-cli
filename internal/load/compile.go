@@ -110,7 +110,7 @@ func task(name string, doc *manifest.Task, model string, servers map[string]*awf
 		Output:   doc.Output,
 		Outcomes: outcomes,
 		Uses:     uses,
-		Body:     doc.Body,
+		Body:     string(doc.Body),
 	}, errs
 }
 

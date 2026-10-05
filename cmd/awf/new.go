@@ -169,6 +169,6 @@ func blankTask(id string, v version.Version) *manifest.Task {
 		OpenAWF: version.SpecVersion,
 		Version: v,
 		Summary: "What this task does.",
-		Body:    fmt.Sprintf("# %s\n\nDescribe the work this task performs, and what it returns.\n", id),
+		Body:    manifest.Body(fmt.Sprintf("# %s\n\nDescribe the work this task performs, and what it returns.\n", id)),
 	}
 }

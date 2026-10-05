@@ -63,7 +63,7 @@ type Task struct {
 	Model    string          `yaml:"model,omitempty"`
 	Outcomes []string        `yaml:"outcomes,omitempty"`
 	Uses     []string        `yaml:"uses,omitempty"`
-	Body     string          `yaml:"body,omitempty"`
+	Body     Body            `yaml:"body,omitempty"`
 }
 
 type MCPServer struct {

@@ -177,7 +177,7 @@ func Task(out io.Writer, path, name string, source []byte, doc *manifest.Task) e
 		Input:    doc.Input,
 		Output:   doc.Output,
 		Outcomes: outcomes,
-		Body:     doc.Body,
+		Body:     string(doc.Body),
 	}, doc)
 	if err != nil {
 		return err

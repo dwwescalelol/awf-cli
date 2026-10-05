@@ -13,6 +13,7 @@ import (
 
 type WorkflowFile struct {
 	Source   []byte
+	Refs     []string
 	Doc      *manifest.Workflow
 	Compiled *awf.Workflow
 }
@@ -86,7 +87,8 @@ func ReadWorkflow(path string, s *store.Store) (*WorkflowFile, error) {
 	if real, err := filepath.EvalSymlinks(path); err == nil {
 		dir = filepath.Dir(real)
 	}
-	unresolved := bundle(f.Doc, dir, s)
+	refs, unresolved := bundle(f.Doc, dir, s)
+	f.Refs = refs
 	w, err := compile(f.Doc)
 	if err := errors.Join(unresolved, err); err != nil {
 		return f, err

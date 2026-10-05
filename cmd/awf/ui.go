@@ -159,7 +159,11 @@ func (srv *server) events(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	watch(w, r, at.Path)
+	paths := []string{at.Path}
+	if f, _ := load.ReadWorkflow(at.Path, srv.store); f != nil {
+		paths = append(paths, f.Refs...)
+	}
+	watch(w, r, paths)
 }
 
 func (srv *server) warn(skipped []store.Skipped) {
@@ -220,7 +224,7 @@ func status(s *store.Store, id store.ID, v version.Version) (bool, error) {
 	return f.Doc.SHA != nil, nil
 }
 
-func watch(w http.ResponseWriter, r *http.Request, path string) {
+func watch(w http.ResponseWriter, r *http.Request, paths []string) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
@@ -230,12 +234,15 @@ func watch(w http.ResponseWriter, r *http.Request, path string) {
 	w.Header().Set("Cache-Control", "no-store")
 	flusher.Flush()
 
-	modified := func() time.Time {
-		fi, err := os.Stat(path)
-		if err != nil {
-			return time.Time{}
+	modified := func() string {
+		var stamp string
+		for _, path := range paths {
+			if fi, err := os.Stat(path); err == nil {
+				stamp += fi.ModTime().String()
+			}
+			stamp += "\n"
 		}
-		return fi.ModTime()
+		return stamp
 	}
 	last := modified()
 	tick := time.NewTicker(500 * time.Millisecond)
@@ -245,7 +252,7 @@ func watch(w http.ResponseWriter, r *http.Request, path string) {
 		case <-r.Context().Done():
 			return
 		case <-tick.C:
-			if now := modified(); !now.Equal(last) {
+			if now := modified(); now != last {
 				last = now
 				fmt.Fprint(w, "data: changed\n\n")
 				flusher.Flush()

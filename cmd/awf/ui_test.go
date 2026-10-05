@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dwwescalelol/awf-cli/internal/store"
 )
@@ -106,5 +109,50 @@ func TestUILocalOnly(t *testing.T) {
 		if rec.Code != want {
 			t.Errorf("%s: got %d, want %d", host, rec.Code, want)
 		}
+	}
+}
+
+func TestUIEventsOnRefChange(t *testing.T) {
+	project(t)
+	task, err := create(store.Task, "build", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wf, err := create(store.Workflow, "deploy", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rewrite(t, wf.path, "start: start", "start: build")
+	rewrite(t, wf.path, "  start: null", "  build: null")
+	data, err := os.ReadFile(wf.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	head, _, _ := strings.Cut(string(data), "tasks:")
+	if err := os.WriteFile(wf.path, []byte(head+"tasks:\n  build:\n    $ref: build@0.1.0\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := httptest.NewServer(handler(t))
+	defer srv.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+workflowURL("deploy", wf.version)+"/events", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	later := time.Now().Add(time.Hour)
+	if err := os.Chtimes(task.path, later, later); err != nil {
+		t.Fatal(err)
+	}
+	line, err := bufio.NewReader(resp.Body).ReadString('\n')
+	if err != nil || line != "data: changed\n" {
+		t.Errorf("got %q, %v, want a change event", line, err)
 	}
 }

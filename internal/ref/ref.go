@@ -1,4 +1,3 @@
-// Package ref parses the $ref of a task entry and locates the task file it names.
 package ref
 
 import (
@@ -14,17 +13,15 @@ import (
 var (
 	ErrRemote   = errors.New("remote $ref unsupported, install the task and reference it as <id>@<version>")
 	ErrUnpinned = errors.New("no version, reference a stored task as <id>@<version>")
+	ErrNoStore  = errors.New("no store to resolve an id in")
 )
 
-// Ref names a task file by path, or a stored task by id and exact version.
 type Ref struct {
 	Path    string
 	ID      store.ID
 	Version version.Version
 }
 
-// Parse reads a $ref. A value holding a path separator or ending in .md is a
-// path. Anything else is <id>@<version>.
 func Parse(s string) (Ref, error) {
 	if strings.Contains(s, "://") {
 		return Ref{}, fmt.Errorf("%q: %w", s, ErrRemote)
@@ -47,10 +44,10 @@ func Parse(s string) (Ref, error) {
 	return Ref{ID: id, Version: v}, nil
 }
 
-// Locate returns the file r names. A relative path resolves against dir, the
-// directory of the document holding the ref. An id resolves in s.
 func (r Ref) Locate(dir string, s *store.Store) (string, error) {
 	switch {
+	case r.Path == "" && s == nil:
+		return "", fmt.Errorf("%s@%s: %w", r.ID, r.Version, ErrNoStore)
 	case r.Path == "":
 		return s.Find(store.Task, r.ID, r.Version)
 	case filepath.IsAbs(r.Path):

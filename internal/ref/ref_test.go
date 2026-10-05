@@ -85,3 +85,9 @@ func TestLocate(t *testing.T) {
 		t.Errorf("absent id: got %v, want %v", err, store.ErrNotInstalled)
 	}
 }
+
+func TestLocateNoStore(t *testing.T) {
+	if _, err := (Ref{ID: "build", Version: version.Version{Minor: 1}}).Locate("", nil); !errors.Is(err, ErrNoStore) {
+		t.Errorf("got %v, want %v", err, ErrNoStore)
+	}
+}

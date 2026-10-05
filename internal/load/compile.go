@@ -11,13 +11,14 @@ import (
 )
 
 var (
-	ErrNotATask     = errors.New("not a defined task")
-	ErrNoNode       = errors.New("no orchestration node")
-	ErrNotDeclared  = errors.New("not declared in mcp")
-	ErrMustBranch   = errors.New("must branch")
-	ErrNoOutcomes   = errors.New("task emits no outcomes")
-	ErrNotAnOutcome = errors.New("not an outcome")
-	ErrNoEdge       = errors.New("no edge")
+	ErrNotATask      = errors.New("not a defined task")
+	ErrNoNode        = errors.New("no orchestration node")
+	ErrNotDeclared   = errors.New("not declared in mcp")
+	ErrMustBranch    = errors.New("must branch")
+	ErrNoOutcomes    = errors.New("task emits no outcomes")
+	ErrNotAnOutcome  = errors.New("not an outcome")
+	ErrNoEdge        = errors.New("no edge")
+	ErrUnresolvedRef = errors.New("unresolved $ref")
 )
 
 // compile lowers a document into the machine it describes, binding every name

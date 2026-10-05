@@ -30,8 +30,6 @@ func Task(path string) (*manifest.Task, error) {
 	return f.Doc, nil
 }
 
-// Workflow reads a workflow, inlines its $ref tasks and compiles it. Relative
-// $ref paths resolve against the workflow's directory, and ids resolve in s.
 func Workflow(path string, s *store.Store) (*awf.Workflow, error) {
 	f, err := ReadWorkflow(path, s)
 	if err != nil {
@@ -40,8 +38,6 @@ func Workflow(path string, s *store.Store) (*awf.Workflow, error) {
 	return f.Compiled, nil
 }
 
-// Document reads a workflow and inlines its $ref tasks, returning the
-// document only when it also compiles.
 func Document(path string, s *store.Store) (*manifest.Workflow, error) {
 	f, err := ReadWorkflow(path, s)
 	if err != nil {
@@ -86,7 +82,11 @@ func ReadWorkflow(path string, s *store.Store) (*WorkflowFile, error) {
 	if invalid != nil {
 		return f, invalid
 	}
-	unresolved := bundle(f.Doc, filepath.Dir(path), s)
+	dir := filepath.Dir(path)
+	if real, err := filepath.EvalSymlinks(path); err == nil {
+		dir = filepath.Dir(real)
+	}
+	unresolved := bundle(f.Doc, dir, s)
 	w, err := compile(f.Doc)
 	if err := errors.Join(unresolved, err); err != nil {
 		return f, err

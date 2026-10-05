@@ -10,10 +10,6 @@ import (
 	"github.com/dwwescalelol/awf-cli/internal/version"
 )
 
-var ErrUnresolvedRef = errors.New("unresolved $ref")
-
-// bundle replaces each $ref entry with the task it names. An entry that fails
-// to resolve stays a $ref.
 func bundle(doc *manifest.Workflow, dir string, s *store.Store) error {
 	var errs []error
 	for _, name := range sorted(doc.Tasks) {
@@ -23,7 +19,7 @@ func bundle(doc *manifest.Workflow, dir string, s *store.Store) error {
 		}
 		t, err := resolve(entry.Ref, dir, s)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("tasks/%s %q: %w: %w", name, entry.Ref, ErrUnresolvedRef, err))
+			errs = append(errs, fmt.Errorf("tasks/%s: %w %q: %w", name, ErrUnresolvedRef, entry.Ref, err))
 			continue
 		}
 		doc.Tasks[name] = manifest.TaskEntry{Task: t}
@@ -44,7 +40,11 @@ func resolve(raw, dir string, s *store.Store) (*manifest.Task, error) {
 	if err != nil {
 		return nil, err
 	}
-	// The workflow declares openawf for the tasks it holds.
+	if r.Path == "" {
+		if err := (&store.Entry{Path: path, ID: r.ID, Version: r.Version}).Check("", t.Version); err != nil {
+			return nil, err
+		}
+	}
 	t.OpenAWF = version.Version{}
 	return t, nil
 }

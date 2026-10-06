@@ -12,7 +12,7 @@ func TestList(t *testing.T) {
 		kind store.DocumentKind
 		id   string
 	}{{store.Workflow, "feat-dev"}, {store.Workflow, "feat-dev"}, {store.Task, "create-diff"}} {
-		if _, err := create(c.kind, c.id, "", false); err != nil {
+		if _, err := create(c.kind, c.id, false); err != nil {
 			t.Fatal(err)
 		}
 	}

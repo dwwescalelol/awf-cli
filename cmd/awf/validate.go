@@ -2,8 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"strings"
 
 	"github.com/dwwescalelol/awf-cli/internal/load"
 	"github.com/dwwescalelol/awf-cli/internal/store"
@@ -25,13 +23,12 @@ func validateCmd() *cobra.Command {
 				return err
 			}
 			fmt.Println(formatValid(path))
-			if len(warnings) > 0 {
-				fmt.Fprintln(os.Stderr, formatWarnings(warnings))
+			for _, w := range warnings {
+				warn(w.Error())
 			}
 			return nil
 		},
 	}
-	cmd.Flags().Bool("global", false, "act on the global store: $AWF_HOME, or ~/.awf when unset")
 	cmd.Flags().StringP("file", "f", "", "path to a document file, a task when it ends in .md")
 	cmd.Flags().BoolP("task", "t", false, "validate a task by id")
 	return cmd
@@ -39,39 +36,18 @@ func validateCmd() *cobra.Command {
 
 func formatValid(path string) string { return path + "\nvalid" }
 
-func formatErr(err error) string { return err.Error() }
-
-func formatWarnings(warnings []error) string {
-	lines := make([]string, 0, len(warnings))
-	for _, w := range warnings {
-		lines = append(lines, "warning: "+w.Error())
-	}
-	return strings.Join(lines, "\n")
-}
-
 func validate(args []string, file string, task, global bool) (string, []error, error) {
-	kind := store.KindOf(file)
-	if task {
-		kind = store.Task
-	}
-	scope, err := store.Resolve(global)
+	d, err := resolve(args, file, task, global)
 	if err != nil {
 		return "", nil, err
 	}
-	path, at, err := target(scope, kind, args, file)
+	if d.kind == store.Task {
+		_, err := load.ReadTask(d.path, d.at)
+		return d.path, nil, err
+	}
+	f, err := load.ReadWorkflow(d.path, d.scope, d.at)
 	if err != nil {
-		return "", nil, err
+		return d.path, nil, err
 	}
-	if kind == store.Task {
-		t, err := load.Task(path)
-		if err != nil {
-			return path, nil, err
-		}
-		return path, nil, at.Check("", t.Version)
-	}
-	w, err := load.Workflow(path, scope)
-	if err != nil {
-		return path, nil, err
-	}
-	return path, w.Warnings(), at.Check(w.Name, w.Version)
+	return d.path, f.Compiled.Warnings(), nil
 }

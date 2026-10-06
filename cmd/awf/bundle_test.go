@@ -14,10 +14,10 @@ import (
 
 func TestBundle(t *testing.T) {
 	root := project(t)
-	if _, err := create(store.Task, "build", "", false); err != nil {
+	if _, err := create(store.Task, "build", false); err != nil {
 		t.Fatal(err)
 	}
-	wf, err := create(store.Workflow, "deploy", "", false)
+	wf, err := create(store.Workflow, "deploy", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func TestBundle(t *testing.T) {
 
 func TestBundleOut(t *testing.T) {
 	root := project(t)
-	if _, err := create(store.Workflow, "deploy", "", false); err != nil {
+	if _, err := create(store.Workflow, "deploy", false); err != nil {
 		t.Fatal(err)
 	}
 	out := filepath.Join(root, "out.yaml")
@@ -87,12 +87,12 @@ func TestBundleOut(t *testing.T) {
 
 func TestBundlePinMismatch(t *testing.T) {
 	project(t)
-	task, err := create(store.Task, "build", "", false)
+	task, err := create(store.Task, "build", false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	rewrite(t, task.path, "version: 0.1.0", "version: 9.9.9")
-	wf, err := create(store.Workflow, "deploy", "", false)
+	wf, err := create(store.Workflow, "deploy", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,5 +120,16 @@ func TestBundleRejectsInvalidGraph(t *testing.T) {
 	}
 	if _, err := bundle(nil, path, "", false); !errors.Is(err, load.ErrNotATask) {
 		t.Errorf("got %v, want %v", err, load.ErrNotATask)
+	}
+}
+
+func TestBundleRejectsTask(t *testing.T) {
+	project(t)
+	task, err := create(store.Task, "build", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := bundle(nil, task.path, "", false); !errors.Is(err, errWrongKind) {
+		t.Errorf("got %v, want %v", err, errWrongKind)
 	}
 }

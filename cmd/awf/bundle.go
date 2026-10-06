@@ -36,26 +36,21 @@ given by -o.`,
 			return err
 		},
 	}
-	cmd.Flags().Bool("global", false, "act on the global store: $AWF_HOME, or ~/.awf when unset")
 	cmd.Flags().StringP("file", "f", "", "path to a workflow file")
 	cmd.Flags().StringP("out", "o", "", "write the bundled workflow to this path")
 	return cmd
 }
 
 func bundle(args []string, file, out string, global bool) ([]byte, error) {
-	scope, err := store.Resolve(global)
+	d, err := resolve(args, file, false, global, store.Workflow)
 	if err != nil {
 		return nil, err
 	}
-	path, _, err := target(scope, store.Workflow, args, file)
+	f, err := load.ReadWorkflow(d.path, d.scope, d.at)
 	if err != nil {
 		return nil, err
 	}
-	doc, err := load.Document(path, scope)
-	if err != nil {
-		return nil, err
-	}
-	data, err := manifest.Marshal(doc)
+	data, err := manifest.Marshal(f.Doc)
 	if err != nil || out == "" {
 		return data, err
 	}

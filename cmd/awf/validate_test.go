@@ -11,12 +11,12 @@ import (
 
 func TestValidateStored(t *testing.T) {
 	project(t)
-	wfDraft, err := create(store.Workflow, "deploy", "", false)
+	wfDraft, err := create(store.Workflow, "deploy", false)
 	wf := wfDraft.path
 	if err != nil {
 		t.Fatal(err)
 	}
-	taskDraft, err := create(store.Task, "build", "", false)
+	taskDraft, err := create(store.Task, "build", false)
 	task := taskDraft.path
 	if err != nil {
 		t.Fatal(err)

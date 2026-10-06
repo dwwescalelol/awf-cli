@@ -100,11 +100,7 @@ func (f *WorkflowFile) read(path string, s *store.Store, at *store.Entry) []erro
 	if len(invalid) > 0 {
 		return invalid
 	}
-	dir := filepath.Dir(path)
-	if real, err := filepath.EvalSymlinks(path); err == nil {
-		dir = filepath.Dir(real)
-	}
-	refs, unresolved := bundle(f.Doc, dir, s)
+	refs, unresolved := bundle(f.Doc, base(path, s), s)
 	f.Refs = refs
 	w, errs := compile(f.Doc)
 	if errs = append(unresolved, errs...); len(errs) > 0 {
@@ -124,4 +120,16 @@ func (f *WorkflowFile) read(path string, s *store.Store, at *store.Entry) []erro
 		return []error{onValue("sha", err)}
 	}
 	return nil
+}
+
+// base is the directory a relative $ref resolves against: the parent of the
+// store in scope, or the workflow's own directory when there is no store.
+func base(path string, s *store.Store) string {
+	if s != nil {
+		return filepath.Dir(s.Dir())
+	}
+	if real, err := filepath.EvalSymlinks(path); err == nil {
+		path = real
+	}
+	return filepath.Dir(path)
 }

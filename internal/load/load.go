@@ -15,6 +15,7 @@ import (
 type WorkflowFile struct {
 	Source   []byte
 	Refs     []string
+	Sources  map[string]string
 	Doc      *manifest.Workflow
 	Compiled *awf.Workflow
 	Warnings []error
@@ -100,8 +101,8 @@ func (f *WorkflowFile) read(path string, s *store.Store, at *store.Entry) []erro
 	if len(invalid) > 0 {
 		return invalid
 	}
-	refs, unresolved := bundle(f.Doc, base(path, s), s)
-	f.Refs = refs
+	refs, sources, unresolved := bundle(f.Doc, base(path, s), s)
+	f.Refs, f.Sources = refs, sources
 	w, errs := compile(f.Doc)
 	if errs = append(unresolved, errs...); len(errs) > 0 {
 		return errs

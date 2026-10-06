@@ -12,8 +12,9 @@ import (
 
 var ErrUnresolvedRef = errors.New("unresolved $ref")
 
-func bundle(doc *manifest.Workflow, dir string, s *store.Store) ([]string, []error) {
+func bundle(doc *manifest.Workflow, dir string, s *store.Store) ([]string, map[string]string, []error) {
 	var paths []string
+	sources := map[string]string{}
 	var errs []error
 	for _, name := range sorted(doc.Tasks) {
 		entry := doc.Tasks[name]
@@ -28,9 +29,11 @@ func bundle(doc *manifest.Workflow, dir string, s *store.Store) ([]string, []err
 			errs = append(errs, unresolved(name, entry.Ref, err)...)
 			continue
 		}
+		t.Source = entry.Ref
 		doc.Tasks[name] = manifest.TaskEntry{Task: t}
+		sources[name] = path
 	}
-	return paths, errs
+	return paths, sources, errs
 }
 
 func unresolved(name, ref string, err error) []error {

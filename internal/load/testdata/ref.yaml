@@ -1,0 +1,17 @@
+openawf: 0.1.0
+name: feat-dev
+sha: null
+start: diff
+orchestration:
+  diff:
+    ok: done
+    fail: diff
+  done: null
+tasks:
+  diff:
+    $ref: ./task.md
+  done:
+    body: done
+mcp:
+  fs: {}
+  gh: {}

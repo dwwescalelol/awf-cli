@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dwwescalelol/awf-cli/internal/version"
+	"github.com/dwwescalelol/awf-cli/internal/build"
 	"github.com/spf13/cobra"
 )
 
@@ -14,13 +14,18 @@ func main() {
 		Short:         "Operate on OpenAWF workflow documents",
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		Version:       version.CLI,
+		Version:       build.Version,
 	}
 	root.SetVersionTemplate("awf {{.Version}}\n")
-	root.AddCommand(lsCmd(), newCmd(), renderCmd(), uiCmd(), validateCmd())
+	root.PersistentFlags().Bool("global", false, "act on the global store: $AWF_HOME, deafults to ~/.awf")
+	root.AddCommand(bundleCmd(), lsCmd(), newCmd(), renderCmd(), uiCmd(), validateCmd())
 
 	if err := root.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, formatErr(err))
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func warn(msg string) {
+	fmt.Fprintln(os.Stderr, "warning: "+msg)
 }

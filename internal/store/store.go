@@ -26,6 +26,8 @@ var (
 	ErrNestedDir    = errors.New("unexpected directory")
 	ErrNotInstalled = errors.New("not installed")
 	ErrExists       = errors.New("already exists")
+	ErrWrongName    = errors.New("name does not match the id it is stored under")
+	ErrWrongVersion = errors.New("version does not match the version it is stored under")
 )
 
 type DocumentKind struct {
@@ -41,11 +43,14 @@ var (
 
 func (k DocumentKind) String() string { return k.name }
 
-func KindOf(path string) DocumentKind {
-	if filepath.Ext(path) == Task.ext {
-		return Task
+func KindOf(path string) (DocumentKind, error) {
+	switch ext := filepath.Ext(path); {
+	case strings.EqualFold(ext, Task.ext):
+		return Task, nil
+	case strings.EqualFold(ext, Workflow.ext):
+		return Workflow, nil
 	}
-	return Workflow
+	return DocumentKind{}, fmt.Errorf("%s: %w", path, ErrNotADocument)
 }
 
 type ID string
@@ -125,6 +130,26 @@ type Store struct {
 }
 
 func New(dir string) *Store { return &Store{dir: dir} }
+
+type Entry struct {
+	Path    string
+	ID      ID
+	Version version.Version
+}
+
+func (e *Entry) Check(name string, v version.Version) error {
+	if e == nil {
+		return nil
+	}
+	var errs []error
+	if name != "" && name != e.ID.String() {
+		errs = append(errs, fmt.Errorf("name %q, stored as %q: %w", name, e.ID, ErrWrongName))
+	}
+	if v.Compare(e.Version) != 0 {
+		errs = append(errs, fmt.Errorf("version %s, stored as %s: %w", v, e.Version, ErrWrongVersion))
+	}
+	return errors.Join(errs...)
+}
 
 func Resolve(global bool) (*Store, error) {
 	locate := FindDir

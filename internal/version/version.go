@@ -8,20 +8,6 @@ import (
 	"strings"
 )
 
-// CLI is the version awf reports. Release builds set it at link time with
-// -ldflags "-X github.com/dwwescalelol/awf-cli/internal/version.CLI=<version>".
-var CLI = "0.1.0"
-
-const Spec = "0.1.0"
-
-const First = "0.1.0"
-
-var (
-	CLIVersion   = mustParse(CLI)
-	SpecVersion  = mustParse(Spec)
-	FirstVersion = mustParse(First)
-)
-
 type Version struct {
 	Major, Minor, Patch int
 }
@@ -50,7 +36,7 @@ func Parse(s string) (Version, error) {
 	return v, nil
 }
 
-func mustParse(s string) Version {
+func MustParse(s string) Version {
 	v, err := Parse(s)
 	if err != nil {
 		panic(err)

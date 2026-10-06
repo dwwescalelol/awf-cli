@@ -70,10 +70,6 @@
       "description": "Where this workflow is fetched from (url, path, or registry id). Omitted when the workflow is authored in place rather than referenced.",
       "type": "string",
       "minLength": 1
-    },
-    "x-meta": {
-      "description": "Managed metadata. Ignored by execution; folded away on display.",
-      "type": "object"
     }
   },
   "$defs": {
@@ -241,9 +237,6 @@
           "description": "The tool-agnostic prompt.",
           "type": "string",
           "minLength": 1
-        },
-        "x-meta": {
-          "type": "object"
         }
       }
     },
@@ -282,4 +275,3 @@
     }
   }
 }
-

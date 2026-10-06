@@ -225,7 +225,7 @@ func (l *layered) span(i int) float64 {
 // SVG draws the workflow's state machine. The start is marked by an entry
 // arrow and each terminal state by a double outline, as in an automaton
 // diagram. Each node links to its task's section of the page.
-func SVG(w *awf.Workflow) template.HTML {
+func SVG(w *awf.Workflow) (template.HTML, error) {
 	l := layout(w)
 
 	right := 0.0
@@ -355,9 +355,9 @@ func SVG(w *awf.Workflow) template.HTML {
 	g.Width, g.Height = hi+pad-g.MinX, bottom+pad
 	var b strings.Builder
 	if err := pages.ExecuteTemplate(&b, "graph", g); err != nil {
-		panic(err)
+		return "", err
 	}
-	return template.HTML(b.String())
+	return template.HTML(b.String()), nil
 }
 
 type graph struct {

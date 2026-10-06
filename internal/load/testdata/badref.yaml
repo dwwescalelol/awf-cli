@@ -1,0 +1,12 @@
+openawf: 0.1.0
+name: feat-dev
+sha: null
+start: plan
+orchestration:
+  plan: review
+  review: null
+tasks:
+  plan:
+    $ref: ./absent.md
+  review:
+    $ref: review

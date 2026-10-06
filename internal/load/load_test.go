@@ -6,14 +6,15 @@ import (
 	"testing"
 
 	"github.com/dwwescalelol/awf-cli/internal/awf"
-	"github.com/dwwescalelol/awf-cli/internal/schema"
+	"github.com/dwwescalelol/awf-cli/internal/manifest"
 )
 
 func TestWorkflow(t *testing.T) {
-	w, err := Workflow(filepath.Join("testdata", "valid.yaml"))
+	f, err := ReadWorkflow(filepath.Join("testdata", "valid.yaml"), nil, nil)
 	if err != nil {
-		t.Fatalf("Workflow: %v", err)
+		t.Fatalf("ReadWorkflow: %v", err)
 	}
+	w := f.Compiled
 	if w.Start == nil || w.Start.Task.Name != "plan" {
 		t.Errorf("start: got %+v, want plan", w.Start)
 	}
@@ -35,7 +36,7 @@ func TestWorkflowErrors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.file, func(t *testing.T) {
-			_, err := Workflow(filepath.Join("testdata", tt.file))
+			_, err := ReadWorkflow(filepath.Join("testdata", tt.file), nil, nil)
 			for _, want := range tt.want {
 				if !errors.Is(err, want) {
 					t.Errorf("got %v, want %v", err, want)
@@ -46,31 +47,31 @@ func TestWorkflowErrors(t *testing.T) {
 }
 
 func TestWorkflowSchema(t *testing.T) {
-	if _, err := Workflow(filepath.Join("testdata", "schema.yaml")); err == nil {
+	if _, err := ReadWorkflow(filepath.Join("testdata", "schema.yaml"), nil, nil); err == nil {
 		t.Fatal("missing start: got no error")
 	}
 }
 
 func TestWorkflowMissingFile(t *testing.T) {
-	if _, err := Workflow(filepath.Join("testdata", "absent.yaml")); err == nil {
+	if _, err := ReadWorkflow(filepath.Join("testdata", "absent.yaml"), nil, nil); err == nil {
 		t.Fatal("got no error")
 	}
 }
 
 func TestTask(t *testing.T) {
-	task, err := Task(filepath.Join("testdata", "task.md"))
+	f, err := ReadTask(filepath.Join("testdata", "task.md"), nil)
 	if err != nil {
-		t.Fatalf("Task: %v", err)
+		t.Fatalf("ReadTask: %v", err)
 	}
-	if task.OpenAWF.String() != "0.1.0" || len(task.Outcomes) != 2 {
-		t.Errorf("got %+v", task)
+	if f.Doc.OpenAWF.String() != "0.1.0" || len(f.Doc.Outcomes) != 2 {
+		t.Errorf("got %+v", f.Doc)
 	}
 }
 
 func TestTaskErrors(t *testing.T) {
 	for _, file := range []string{"badtask.md", "noversion.md", "valid.yaml", "bodykey.md"} {
 		t.Run(file, func(t *testing.T) {
-			if _, err := Task(filepath.Join("testdata", file)); err == nil {
+			if _, err := ReadTask(filepath.Join("testdata", file), nil); err == nil {
 				t.Error("got no error")
 			}
 		})
@@ -78,7 +79,7 @@ func TestTaskErrors(t *testing.T) {
 }
 
 func TestTaskReservedBody(t *testing.T) {
-	if _, err := Task(filepath.Join("testdata", "bodykey.md")); !errors.Is(err, schema.ErrReservedBody) {
-		t.Errorf("got %v, want %v", err, schema.ErrReservedBody)
+	if _, err := ReadTask(filepath.Join("testdata", "bodykey.md"), nil); !errors.Is(err, manifest.ErrReservedBody) {
+		t.Errorf("got %v, want %v", err, manifest.ErrReservedBody)
 	}
 }

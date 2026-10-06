@@ -11,12 +11,12 @@ import (
 
 func TestValidateStored(t *testing.T) {
 	project(t)
-	wfDraft, err := create(store.Workflow, "deploy", "", false)
+	wfDraft, err := create(store.Workflow, "deploy", false)
 	wf := wfDraft.path
 	if err != nil {
 		t.Fatal(err)
 	}
-	taskDraft, err := create(store.Task, "build", "", false)
+	taskDraft, err := create(store.Task, "build", false)
 	task := taskDraft.path
 	if err != nil {
 		t.Fatal(err)
@@ -32,7 +32,7 @@ func TestValidateStored(t *testing.T) {
 	rewrite(t, wf, "name: deploy", "name: other")
 	rewrite(t, wf, "version: 0.1.0\nsha", "version: 3.0.0\nsha")
 	_, _, err = validate([]string{"deploy"}, "", false, false)
-	if !errors.Is(err, errWrongName) || !errors.Is(err, errWrongVersion) {
+	if !errors.Is(err, store.ErrWrongName) || !errors.Is(err, store.ErrWrongVersion) {
 		t.Errorf("workflow: got %v, want both mismatches", err)
 	}
 	if _, _, err := validate(nil, wf, false, false); err != nil {
@@ -40,8 +40,8 @@ func TestValidateStored(t *testing.T) {
 	}
 
 	rewrite(t, task, "version: 0.1.0", "version: 2.0.0")
-	if _, _, err := validate([]string{"build"}, "", true, false); !errors.Is(err, errWrongVersion) {
-		t.Errorf("task: got %v, want %v", err, errWrongVersion)
+	if _, _, err := validate([]string{"build"}, "", true, false); !errors.Is(err, store.ErrWrongVersion) {
+		t.Errorf("task: got %v, want %v", err, store.ErrWrongVersion)
 	}
 }
 

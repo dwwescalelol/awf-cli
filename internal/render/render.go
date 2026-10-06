@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/dwwescalelol/awf-cli/internal/awf"
+	"github.com/dwwescalelol/awf-cli/internal/build"
 	"github.com/dwwescalelol/awf-cli/internal/manifest"
 	"github.com/dwwescalelol/awf-cli/internal/version"
 	"github.com/goccy/go-yaml"
@@ -113,6 +114,10 @@ type Server struct {
 // Workflow writes the page for a compiled workflow. doc supplies the fields
 // compiling drops, such as each sha, and source is the file as written.
 func Workflow(out io.Writer, path string, source []byte, doc *manifest.Workflow, w *awf.Workflow, scope Scope, live string) error {
+	graph, err := SVG(w)
+	if err != nil {
+		return err
+	}
 	p := Page{
 		Name:    w.Name,
 		Version: versionString(w.Version),
@@ -120,9 +125,9 @@ func Workflow(out io.Writer, path string, source []byte, doc *manifest.Workflow,
 		Model:   w.Model,
 		SHA:     sha(doc.SHA),
 		Path:    path,
-		Graph:   SVG(w),
+		Graph:   graph,
 		Source:  string(source),
-		CLI:     version.CLI,
+		CLI:     build.Version,
 		Scope:   scope,
 		Live:    live,
 	}
@@ -177,7 +182,7 @@ func Task(out io.Writer, path, name string, source []byte, doc *manifest.Task) e
 		Input:    doc.Input,
 		Output:   doc.Output,
 		Outcomes: outcomes,
-		Body:     doc.Body,
+		Body:     string(doc.Body),
 	}, doc)
 	if err != nil {
 		return err
@@ -191,7 +196,7 @@ func Task(out io.Writer, path, name string, source []byte, doc *manifest.Task) e
 		Path:    path,
 		Tasks:   []TaskView{t},
 		Source:  string(source),
-		CLI:     version.CLI,
+		CLI:     build.Version,
 	})
 }
 
@@ -205,7 +210,7 @@ func Invalid(out io.Writer, path string, h Header, source []byte, err error, sco
 		SHA:     h.SHA,
 		Path:    path,
 		Source:  string(source),
-		CLI:     version.CLI,
+		CLI:     build.Version,
 		Scope:   scope,
 		Live:    live,
 		Error:   err.Error(),

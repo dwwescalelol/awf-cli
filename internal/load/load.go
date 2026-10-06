@@ -8,6 +8,7 @@ import (
 	"github.com/dwwescalelol/awf-cli/internal/awf"
 	"github.com/dwwescalelol/awf-cli/internal/manifest"
 	"github.com/dwwescalelol/awf-cli/internal/schema"
+	"github.com/dwwescalelol/awf-cli/internal/seal"
 	"github.com/dwwescalelol/awf-cli/internal/store"
 )
 
@@ -64,6 +65,9 @@ func (f *TaskFile) read(front []byte, body string, at *store.Entry) []error {
 	if err := at.CheckVersion(f.Doc.Version); err != nil {
 		return []error{onValue("version", err)}
 	}
+	if err := seal.CheckTask(f.Doc); err != nil {
+		return []error{onValue("sha", err)}
+	}
 	return nil
 }
 
@@ -113,5 +117,11 @@ func (f *WorkflowFile) read(path string, s *store.Store, at *store.Entry) []erro
 	if err := at.CheckVersion(f.Doc.Version); err != nil {
 		errs = append(errs, onValue("version", err))
 	}
-	return errs
+	if len(errs) > 0 {
+		return errs
+	}
+	if err := seal.CheckWorkflow(f.Doc); err != nil {
+		return []error{onValue("sha", err)}
+	}
+	return nil
 }

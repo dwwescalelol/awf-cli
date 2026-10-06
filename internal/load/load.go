@@ -23,31 +23,7 @@ type TaskFile struct {
 	Doc    *manifest.Task
 }
 
-func Task(path string) (*manifest.Task, error) {
-	f, err := ReadTask(path)
-	if err != nil {
-		return nil, err
-	}
-	return f.Doc, nil
-}
-
-func Workflow(path string, s *store.Store) (*awf.Workflow, error) {
-	f, err := ReadWorkflow(path, s)
-	if err != nil {
-		return nil, err
-	}
-	return f.Compiled, nil
-}
-
-func Document(path string, s *store.Store) (*manifest.Workflow, error) {
-	f, err := ReadWorkflow(path, s)
-	if err != nil {
-		return nil, err
-	}
-	return f.Doc, nil
-}
-
-func ReadTask(path string) (*TaskFile, error) {
+func ReadTask(path string, at *store.Entry) (*TaskFile, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -57,17 +33,23 @@ func ReadTask(path string) (*TaskFile, error) {
 	if err != nil {
 		return f, err
 	}
-	invalid := schema.ValidateTask(front, body)
-	if f.Doc, err = manifest.UnmarshalTask(data); err != nil {
+	doc, invalid := manifest.TaskDocument(front, body)
+	if invalid == nil {
+		invalid = schema.ValidateTask(doc)
+	}
+	if f.Doc, err = manifest.DecodeTask(front, body); err != nil {
 		f.Doc = nil
 		if invalid == nil {
 			invalid = err
 		}
 	}
-	return f, invalid
+	if invalid != nil {
+		return f, invalid
+	}
+	return f, at.Check("", f.Doc.Version)
 }
 
-func ReadWorkflow(path string, s *store.Store) (*WorkflowFile, error) {
+func ReadWorkflow(path string, s *store.Store, at *store.Entry) (*WorkflowFile, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -94,5 +76,5 @@ func ReadWorkflow(path string, s *store.Store) (*WorkflowFile, error) {
 		return f, err
 	}
 	f.Compiled = w
-	return f, nil
+	return f, at.Check(f.Doc.Name, f.Doc.Version)
 }

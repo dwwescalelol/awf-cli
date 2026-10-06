@@ -10,6 +10,8 @@ import (
 	"github.com/dwwescalelol/awf-cli/internal/version"
 )
 
+var ErrUnresolvedRef = errors.New("unresolved $ref")
+
 func bundle(doc *manifest.Workflow, dir string, s *store.Store) ([]string, error) {
 	var paths []string
 	var errs []error
@@ -40,15 +42,15 @@ func resolve(raw, dir string, s *store.Store) (*manifest.Task, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	t, err := Task(path)
+	var at *store.Entry
+	if r.Path == "" {
+		at = &store.Entry{Path: path, ID: r.ID, Version: r.Version}
+	}
+	f, err := ReadTask(path, at)
 	if err != nil {
 		return nil, path, err
 	}
-	if r.Path == "" {
-		if err := (&store.Entry{Path: path, ID: r.ID, Version: r.Version}).Check("", t.Version); err != nil {
-			return nil, path, err
-		}
-	}
+	t := f.Doc
 	t.OpenAWF = version.Version{}
 	return t, path, nil
 }

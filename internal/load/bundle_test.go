@@ -10,12 +10,12 @@ import (
 	"github.com/dwwescalelol/awf-cli/internal/version"
 )
 
-func TestDocument(t *testing.T) {
-	doc, err := Document(filepath.Join("testdata", "ref.yaml"), nil)
+func TestBundle(t *testing.T) {
+	f, err := ReadWorkflow(filepath.Join("testdata", "ref.yaml"), nil, nil)
 	if err != nil {
-		t.Fatalf("Document: %v", err)
+		t.Fatalf("ReadWorkflow: %v", err)
 	}
-	diff := doc.Tasks["diff"]
+	diff := f.Doc.Tasks["diff"]
 	if diff.Ref != "" || diff.Task == nil {
 		t.Fatalf("diff: got %+v, want an inline task", diff)
 	}
@@ -28,34 +28,26 @@ func TestDocument(t *testing.T) {
 }
 
 func TestWorkflowRef(t *testing.T) {
-	w, err := Workflow(filepath.Join("testdata", "ref.yaml"), nil)
+	f, err := ReadWorkflow(filepath.Join("testdata", "ref.yaml"), nil, nil)
 	if err != nil {
-		t.Fatalf("Workflow: %v", err)
+		t.Fatalf("ReadWorkflow: %v", err)
 	}
-	if len(w.Start.Out) != 2 {
-		t.Errorf("diff: got %d edges, want ok and fail", len(w.Start.Out))
+	if len(f.Compiled.Start.Out) != 2 {
+		t.Errorf("diff: got %d edges, want ok and fail", len(f.Compiled.Start.Out))
 	}
 }
 
 func TestUnresolvedRef(t *testing.T) {
-	path := filepath.Join("testdata", "badref.yaml")
-	for name, load := range map[string]func() error{
-		"Document": func() error { _, err := Document(path, nil); return err },
-		"Workflow": func() error { _, err := Workflow(path, nil); return err },
-	} {
-		t.Run(name, func(t *testing.T) {
-			err := load()
-			for _, want := range []error{ErrUnresolvedRef, fs.ErrNotExist, ref.ErrUnpinned} {
-				if !errors.Is(err, want) {
-					t.Errorf("got %v, want %v", err, want)
-				}
-			}
-		})
+	_, err := ReadWorkflow(filepath.Join("testdata", "badref.yaml"), nil, nil)
+	for _, want := range []error{ErrUnresolvedRef, fs.ErrNotExist, ref.ErrUnpinned} {
+		if !errors.Is(err, want) {
+			t.Errorf("got %v, want %v", err, want)
+		}
 	}
 }
 
 func TestUnresolvedRefEdges(t *testing.T) {
-	_, err := Workflow(filepath.Join("testdata", "branchref.yaml"), nil)
+	_, err := ReadWorkflow(filepath.Join("testdata", "branchref.yaml"), nil, nil)
 	if !errors.Is(err, ErrUnresolvedRef) || !errors.Is(err, ErrNotATask) {
 		t.Errorf("got %v, want the $ref and the undefined edge target", err)
 	}

@@ -10,10 +10,9 @@ import (
 )
 
 var (
-	ErrNotAnEdge   = errors.New("not a task name or an edge")
-	ErrNotATask    = errors.New("not a task or a $ref")
-	ErrNotTools    = errors.New(`not a tool list or "*"`)
-	ErrSHAMismatch = errors.New("sha does not match content")
+	ErrNotAnEdge = errors.New("not a task name or an edge")
+	ErrNotATask  = errors.New("not a task or a $ref")
+	ErrNotTools  = errors.New(`not a tool list or "*"`)
 )
 
 type Workflow struct {

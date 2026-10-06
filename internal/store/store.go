@@ -226,6 +226,22 @@ func (s *Store) Write(kind DocumentKind, id ID, v version.Version, data []byte) 
 	return f.Close()
 }
 
+func (s *Store) Replace(kind DocumentKind, id ID, v version.Version, data []byte) error {
+	path, err := s.Find(kind, id, v)
+	if err != nil {
+		return err
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, filePerm)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return err
+	}
+	return f.Close()
+}
+
 func (s *Store) List(kind DocumentKind) ([]Document, []Skipped, error) {
 	root := s.kindDir(kind)
 	entries, err := os.ReadDir(root)

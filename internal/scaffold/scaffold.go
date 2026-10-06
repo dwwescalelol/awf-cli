@@ -73,7 +73,7 @@ func draft[T any](s *store.Store, kind store.DocumentKind, id store.ID, previous
 func blankWorkflow(id string, v version.Version) *manifest.Workflow {
 	const start = "start"
 	task := blankTask(start, v)
-	task.OpenAWF = version.Version{}
+	task.OpenAWF, task.Version = version.Version{}, version.Version{}
 	return &manifest.Workflow{
 		OpenAWF:       schema.SpecVersion,
 		Name:          id,

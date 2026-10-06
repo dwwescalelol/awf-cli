@@ -67,15 +67,20 @@ func DecodeTask(front []byte, body string) (*Task, error) {
 
 func MarshalTask(t *Task) ([]byte, error) {
 	front := *t
-	front.Body = ""
-	data, err := yaml.MarshalWithOptions(front, yaml.IndentSequence(true))
+	front.SHA, front.Body = nil, ""
+	fields, err := yaml.MarshalWithOptions(front, yaml.IndentSequence(true))
+	if err != nil {
+		return nil, err
+	}
+	sha, err := yaml.Marshal(map[string]any{"sha": t.SHA})
 	if err != nil {
 		return nil, err
 	}
 
 	var b bytes.Buffer
 	b.WriteString(fence)
-	b.Write(data)
+	b.Write(fields)
+	b.Write(sha)
 	b.WriteString(fence)
 	b.WriteString("\n")
 	b.WriteString(string(t.Body))

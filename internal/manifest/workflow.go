@@ -54,7 +54,7 @@ type TaskEntry struct {
 type Task struct {
 	OpenAWF  version.Version `yaml:"openawf,omitempty"`
 	Version  version.Version `yaml:"version,omitempty"`
-	SHA      *string         `yaml:"sha"`
+	SHA      *string         `yaml:"sha,omitempty"`
 	Source   string          `yaml:"source,omitempty"`
 	Summary  string          `yaml:"summary,omitempty"`
 	Input    map[string]any  `yaml:"input,omitempty"`

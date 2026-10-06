@@ -1,7 +1,6 @@
 ---
 openawf: 0.1.0
 version: 0.1.0
-sha: null
 summary: Produce a diff for the branch.
 input:
   branch: string
@@ -14,6 +13,7 @@ outcomes:
 uses:
   - fs
   - gh
+sha: null
 ---
 
 # create-diff

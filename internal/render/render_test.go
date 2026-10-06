@@ -12,7 +12,7 @@ import (
 func renderBranchy(t *testing.T) string {
 	t.Helper()
 	path := filepath.Join("testdata", "branchy.yaml")
-	f, err := load.ReadWorkflow(path, nil)
+	f, err := load.ReadWorkflow(path, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,10 +45,11 @@ func TestWorkflowPage(t *testing.T) {
 }
 
 func TestFlowOrder(t *testing.T) {
-	w, err := load.Workflow(filepath.Join("testdata", "branchy.yaml"), nil)
+	f, err := load.ReadWorkflow(filepath.Join("testdata", "branchy.yaml"), nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	w := f.Compiled
 	var names []string
 	for _, s := range flowOrder(w) {
 		names = append(names, s.Task.Name)
@@ -61,10 +62,11 @@ func TestFlowOrder(t *testing.T) {
 }
 
 func TestLayoutRanks(t *testing.T) {
-	w, err := load.Workflow(filepath.Join("testdata", "branchy.yaml"), nil)
+	f, err := load.ReadWorkflow(filepath.Join("testdata", "branchy.yaml"), nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	w := f.Compiled
 	l := layout(w)
 	ranks := make(map[string]int)
 	for _, n := range l.nodes {

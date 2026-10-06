@@ -30,11 +30,14 @@ func (p *Problem) Error() string {
 	if p.Warning {
 		severity = "warning"
 	}
-	msg := p.Err.Error()
+	return fmt.Sprintf("%s:%d:%d: %s: %s", p.File, p.Line, p.Column, severity, p.Message())
+}
+
+func (p *Problem) Message() string {
 	if y, ok := p.Err.(yaml.Error); ok {
-		msg = y.GetMessage()
+		return y.GetMessage()
 	}
-	return fmt.Sprintf("%s:%d:%d: %s: %s", p.File, p.Line, p.Column, severity, msg)
+	return p.Err.Error()
 }
 
 func (p *Problem) Unwrap() error { return p.Err }

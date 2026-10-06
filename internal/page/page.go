@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -15,10 +16,15 @@ import (
 var ErrInvalid = errors.New("does not validate, the page shows why")
 
 func Workflow(w io.Writer, path string, s *store.Store, at *store.Entry, scope render.Scope, live string) error {
-	f, err := load.ReadWorkflow(path, s, at)
-	if f == nil {
+	data, err := os.ReadFile(path)
+	if err != nil {
 		return err
 	}
+	return WorkflowData(w, path, data, s, at, scope, live)
+}
+
+func WorkflowData(w io.Writer, path string, data []byte, s *store.Store, at *store.Entry, scope render.Scope, live string) error {
+	f, err := load.ReadWorkflowData(path, data, s, at)
 	if err != nil {
 		return invalid(w, path, render.WorkflowHeader(fileName(path), f.Doc), f.Source, err, scope, live)
 	}
@@ -26,14 +32,19 @@ func Workflow(w io.Writer, path string, s *store.Store, at *store.Entry, scope r
 }
 
 func Task(w io.Writer, path string, at *store.Entry) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	return TaskData(w, path, data, at)
+}
+
+func TaskData(w io.Writer, path string, data []byte, at *store.Entry) error {
 	name := fileName(path)
 	if at != nil {
 		name = at.ID.String()
 	}
-	f, err := load.ReadTask(path, at)
-	if f == nil {
-		return err
-	}
+	f, err := load.ReadTaskData(path, data, at)
 	if err != nil {
 		return invalid(w, path, render.TaskHeader(name, f.Doc), f.Source, err, render.Scope{}, "")
 	}

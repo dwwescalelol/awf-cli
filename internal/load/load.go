@@ -31,6 +31,10 @@ func ReadTask(path string, at *store.Entry) (*TaskFile, error) {
 	if err != nil {
 		return nil, err
 	}
+	return ReadTaskData(path, data, at)
+}
+
+func ReadTaskData(path string, data []byte, at *store.Entry) (*TaskFile, error) {
 	f := &TaskFile{Source: data}
 	front, body, err := manifest.SplitTask(data)
 	if err != nil {
@@ -77,6 +81,10 @@ func ReadWorkflow(path string, s *store.Store, at *store.Entry) (*WorkflowFile, 
 	if err != nil {
 		return nil, err
 	}
+	return ReadWorkflowData(path, data, s, at)
+}
+
+func ReadWorkflowData(path string, data []byte, s *store.Store, at *store.Entry) (*WorkflowFile, error) {
 	f := &WorkflowFile{Source: data}
 	src, err := parse(path, data)
 	if err != nil {
@@ -101,7 +109,7 @@ func (f *WorkflowFile) read(path string, s *store.Store, at *store.Entry) []erro
 	if len(invalid) > 0 {
 		return invalid
 	}
-	refs, sources, unresolved := bundle(f.Doc, base(path, s), s)
+	refs, sources, unresolved := bundle(f.Doc, Base(path, s), s)
 	f.Refs, f.Sources = refs, sources
 	w, errs := compile(f.Doc)
 	if errs = append(unresolved, errs...); len(errs) > 0 {
@@ -123,9 +131,9 @@ func (f *WorkflowFile) read(path string, s *store.Store, at *store.Entry) []erro
 	return nil
 }
 
-// base is the directory a relative $ref resolves against: the parent of the
+// Base is the directory a relative $ref resolves against: the parent of the
 // store in scope, or the workflow's own directory when there is no store.
-func base(path string, s *store.Store) string {
+func Base(path string, s *store.Store) string {
 	if s != nil {
 		return filepath.Dir(s.Dir())
 	}

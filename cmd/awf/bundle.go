@@ -16,8 +16,8 @@ func bundleCmd() *cobra.Command {
 		Long: `Inline a workflow's $ref tasks into one document.
 
 A $ref is a path to a task file or a stored task pinned as <id>@<version>.
-A relative path resolves against the workflow's directory. An id resolves in
-the store in scope. The bundled workflow prints to stdout, or to the file
+A relative path resolves against the directory holding the store in scope.
+An id resolves in the store in scope. The bundled workflow prints to stdout, or to the file
 given by -o.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

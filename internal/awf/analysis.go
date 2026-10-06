@@ -11,6 +11,15 @@ var (
 	ErrUnreachable = errors.New("unreachable from start")
 )
 
+type StateError struct {
+	State string
+	Err   error
+}
+
+func (e *StateError) Error() string { return "orchestration/" + e.State + ": " + e.Err.Error() }
+
+func (e *StateError) Unwrap() error { return e.Err }
+
 func (w *Workflow) TrapStates() []*State {
 	if w.Start == nil {
 		return nil
@@ -29,20 +38,20 @@ func (w *Workflow) TrapStates() []*State {
 
 // Check reports why the machine can never finish: it has no terminal state, or
 // it has states that trap a run. One call answers the whole machine.
-func (w *Workflow) Check() error {
+func (w *Workflow) Check() []error {
 	if w.Start == nil {
 		return nil
 	}
 	if len(terminals(w.States)) == 0 {
-		return fmt.Errorf("orchestration: %w", ErrNoTerminal)
+		return []error{fmt.Errorf("orchestration: %w", ErrNoTerminal)}
 	}
 
 	trapped := w.TrapStates()
 	errs := make([]error, 0, len(trapped))
 	for _, s := range trapped {
-		errs = append(errs, fmt.Errorf("orchestration/%s: %w", s.Task.Name, ErrNoPath))
+		errs = append(errs, &StateError{State: s.Task.Name, Err: ErrNoPath})
 	}
-	return errors.Join(errs...)
+	return errs
 }
 
 func (w *Workflow) Unreachable() []*State {
@@ -64,7 +73,7 @@ func (w *Workflow) Warnings() []error {
 	unreachable := w.Unreachable()
 	out := make([]error, 0, len(unreachable))
 	for _, s := range unreachable {
-		out = append(out, fmt.Errorf("orchestration/%s: %w", s.Task.Name, ErrUnreachable))
+		out = append(out, &StateError{State: s.Task.Name, Err: ErrUnreachable})
 	}
 	return out
 }

@@ -1,0 +1,10 @@
+openawf: 0.1.0
+name: feat-dev
+sha: null
+start: plan
+orchestration:
+  plan: null
+tasks:
+  plan:
+    modle: opus
+    body: plan

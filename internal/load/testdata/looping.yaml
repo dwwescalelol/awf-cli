@@ -1,0 +1,23 @@
+openawf: 0.1.0
+name: feat-dev
+sha: null
+start: plan
+orchestration:
+  plan:
+    ok: done
+    fail: loop
+  loop: again
+  again: loop
+  done: null
+tasks:
+  plan:
+    outcomes:
+      - ok
+      - fail
+    body: plan
+  loop:
+    body: loop
+  again:
+    body: again
+  done:
+    body: done

@@ -16,6 +16,7 @@ type WorkflowFile struct {
 	Refs     []string
 	Doc      *manifest.Workflow
 	Compiled *awf.Workflow
+	Warnings []error
 }
 
 type TaskFile struct {
@@ -31,22 +32,39 @@ func ReadTask(path string, at *store.Entry) (*TaskFile, error) {
 	f := &TaskFile{Source: data}
 	front, body, err := manifest.SplitTask(data)
 	if err != nil {
+		return f, (&source{file: display(path)}).report([]error{err})
+	}
+	src, err := parse(path, front)
+	if err != nil {
 		return f, err
 	}
-	doc, invalid := manifest.TaskDocument(front, body)
-	if invalid == nil {
+	return f, src.report(f.read(front, body, at))
+}
+
+func (f *TaskFile) read(front []byte, body string, at *store.Entry) []error {
+	var invalid []error
+	doc, err := manifest.TaskDocument(front, body)
+	switch {
+	case errors.Is(err, manifest.ErrReservedBody):
+		invalid = []error{onKey("body", err)}
+	case err != nil:
+		invalid = []error{err}
+	default:
 		invalid = schema.ValidateTask(doc)
 	}
 	if f.Doc, err = manifest.DecodeTask(front, body); err != nil {
 		f.Doc = nil
-		if invalid == nil {
-			invalid = err
+		if len(invalid) == 0 {
+			invalid = []error{err}
 		}
 	}
-	if invalid != nil {
-		return f, invalid
+	if len(invalid) > 0 {
+		return invalid
 	}
-	return f, at.Check("", f.Doc.Version)
+	if err := at.CheckVersion(f.Doc.Version); err != nil {
+		return []error{onValue("version", err)}
+	}
+	return nil
 }
 
 func ReadWorkflow(path string, s *store.Store, at *store.Entry) (*WorkflowFile, error) {
@@ -55,15 +73,28 @@ func ReadWorkflow(path string, s *store.Store, at *store.Entry) (*WorkflowFile, 
 		return nil, err
 	}
 	f := &WorkflowFile{Source: data}
-	_, invalid := schema.Validate(data)
-	if f.Doc, err = manifest.Unmarshal(data); err != nil {
+	src, err := parse(path, data)
+	if err != nil {
+		return f, err
+	}
+	errs := f.read(path, s, at)
+	if f.Compiled != nil {
+		f.Warnings = src.warnings(f.Compiled.Warnings())
+	}
+	return f, src.report(errs)
+}
+
+func (f *WorkflowFile) read(path string, s *store.Store, at *store.Entry) []error {
+	_, invalid := schema.Validate(f.Source)
+	var err error
+	if f.Doc, err = manifest.Unmarshal(f.Source); err != nil {
 		f.Doc = nil
-		if invalid == nil {
-			invalid = err
+		if len(invalid) == 0 {
+			invalid = []error{err}
 		}
 	}
-	if invalid != nil {
-		return f, invalid
+	if len(invalid) > 0 {
+		return invalid
 	}
 	dir := filepath.Dir(path)
 	if real, err := filepath.EvalSymlinks(path); err == nil {
@@ -71,10 +102,16 @@ func ReadWorkflow(path string, s *store.Store, at *store.Entry) (*WorkflowFile, 
 	}
 	refs, unresolved := bundle(f.Doc, dir, s)
 	f.Refs = refs
-	w, err := compile(f.Doc)
-	if err := errors.Join(unresolved, err); err != nil {
-		return f, err
+	w, errs := compile(f.Doc)
+	if errs = append(unresolved, errs...); len(errs) > 0 {
+		return errs
 	}
 	f.Compiled = w
-	return f, at.Check(f.Doc.Name, f.Doc.Version)
+	if err := at.CheckName(f.Doc.Name); err != nil {
+		errs = append(errs, onValue("name", err))
+	}
+	if err := at.CheckVersion(f.Doc.Version); err != nil {
+		errs = append(errs, onValue("version", err))
+	}
+	return errs
 }

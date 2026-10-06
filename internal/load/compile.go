@@ -23,14 +23,14 @@ var (
 // compile lowers a document into the machine it describes, binding every name
 // to what it names. It reports every unbound name at once, and yields a
 // machine only when all of them bind.
-func compile(doc *manifest.Workflow) (*awf.Workflow, error) {
+func compile(doc *manifest.Workflow) (*awf.Workflow, []error) {
 	servers := servers(doc.MCP)
 	states, errs := states(doc, servers)
 
 	for _, name := range sorted(doc.Orchestration) {
 		state, ok := states[name]
 		if !ok {
-			errs = append(errs, fmt.Errorf("orchestration/%s: %w", name, ErrNotATask))
+			errs = append(errs, onKey("orchestration/"+name, fmt.Errorf("orchestration/%s: %w", name, ErrNotATask)))
 			continue
 		}
 		unresolved := doc.Tasks[name].Task == nil
@@ -40,11 +40,11 @@ func compile(doc *manifest.Workflow) (*awf.Workflow, error) {
 
 	start, ok := states[doc.Start]
 	if !ok {
-		errs = append(errs, fmt.Errorf("start %q: %w", doc.Start, ErrNotATask))
+		errs = append(errs, onValue("start", fmt.Errorf("start %q: %w", doc.Start, ErrNotATask)))
 	}
 
 	if len(errs) > 0 {
-		return nil, errors.Join(errs...)
+		return nil, errs
 	}
 
 	w := &awf.Workflow{
@@ -56,7 +56,13 @@ func compile(doc *manifest.Workflow) (*awf.Workflow, error) {
 		States:  ordered(states),
 		Servers: ordered(servers),
 	}
-	return w, w.Check()
+	for _, err := range w.Check() {
+		if _, ok := err.(*awf.StateError); !ok {
+			err = onKey("orchestration", err)
+		}
+		errs = append(errs, err)
+	}
+	return w, errs
 }
 
 func states(doc *manifest.Workflow, servers map[string]*awf.MCPServer) (map[string]*awf.State, []error) {
@@ -66,7 +72,7 @@ func states(doc *manifest.Workflow, servers map[string]*awf.MCPServer) (map[stri
 	for _, name := range sorted(doc.Tasks) {
 		entry := doc.Tasks[name]
 		if _, ok := doc.Orchestration[name]; !ok {
-			errs = append(errs, fmt.Errorf("tasks/%s: %w", name, ErrNoNode))
+			errs = append(errs, onKey("tasks/"+name, fmt.Errorf("tasks/%s: %w", name, ErrNoNode)))
 		}
 		if entry.Task == nil {
 			// bundle reported the $ref. A placeholder lets edges to it still bind.
@@ -86,10 +92,10 @@ func task(name string, doc *manifest.Task, model string, servers map[string]*awf
 
 	var errs []error
 	uses := make([]*awf.MCPServer, 0, len(doc.Uses))
-	for _, use := range doc.Uses {
+	for i, use := range doc.Uses {
 		server, ok := servers[use]
 		if !ok {
-			errs = append(errs, fmt.Errorf("tasks/%s/uses %q: %w", name, use, ErrNotDeclared))
+			errs = append(errs, onValue(fmt.Sprintf("tasks/%s/uses/%d", name, i), fmt.Errorf("tasks/%s/uses %q: %w", name, use, ErrNotDeclared)))
 			continue
 		}
 		uses = append(uses, server)
@@ -127,27 +133,27 @@ func edges(name string, node manifest.Transition, states map[string]*awf.State, 
 
 	case node.Edge == nil && node.Branch == nil:
 		if len(outcomes) > 0 {
-			return nil, []error{fmt.Errorf("%s: %w on %q", path, ErrMustBranch, outcomes)}
+			return nil, []error{onKey(path, fmt.Errorf("%s: %w on %q", path, ErrMustBranch, outcomes))}
 		}
 		return nil, nil
 
 	case node.Edge != nil:
 		if len(outcomes) > 0 {
-			return nil, []error{fmt.Errorf("%s: %w on %q", path, ErrMustBranch, outcomes)}
+			return nil, []error{onKey(path, fmt.Errorf("%s: %w on %q", path, ErrMustBranch, outcomes))}
 		}
 		e, errs := edge(path, "", *node.Edge, states)
 		return []awf.Edge{e}, errs
 	}
 
 	if len(outcomes) == 0 {
-		return nil, []error{fmt.Errorf("%s: %w", path, ErrNoOutcomes)}
+		return nil, []error{onKey(path, fmt.Errorf("%s: %w", path, ErrNoOutcomes))}
 	}
 
 	var errs []error
 	out := make([]awf.Edge, 0, len(node.Branch))
 	for _, on := range sorted(node.Branch) {
 		if !slices.Contains(outcomes, awf.Outcome(on)) {
-			errs = append(errs, fmt.Errorf("%s/%s: %w of %q", path, on, ErrNotAnOutcome, name))
+			errs = append(errs, onKey(path+"/"+on, fmt.Errorf("%s/%s: %w of %q", path, on, ErrNotAnOutcome, name)))
 			continue
 		}
 		e, err := edge(path+"/"+on, awf.Outcome(on), node.Branch[on], states)
@@ -155,7 +161,7 @@ func edges(name string, node manifest.Transition, states map[string]*awf.State, 
 	}
 	for _, on := range outcomes {
 		if _, ok := node.Branch[string(on)]; !ok {
-			errs = append(errs, fmt.Errorf("%s/%s: %w", path, on, ErrNoEdge))
+			errs = append(errs, onKey(path+"/"+string(on), fmt.Errorf("%s/%s: %w", path, on, ErrNoEdge)))
 		}
 	}
 	return out, errs
@@ -178,7 +184,7 @@ func targets(path string, node manifest.Transition, states map[string]*awf.State
 func edge(path string, on awf.Outcome, doc manifest.Edge, states map[string]*awf.State) (awf.Edge, []error) {
 	to, ok := states[doc.Task]
 	if !ok {
-		return awf.Edge{}, []error{fmt.Errorf("%s %q: %w", path, doc.Task, ErrNotATask)}
+		return awf.Edge{}, []error{onValue(path, fmt.Errorf("%s %q: %w", path, doc.Task, ErrNotATask))}
 	}
 	session := awf.Session(doc.Session)
 	if session == "" {

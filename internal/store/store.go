@@ -43,11 +43,14 @@ var (
 
 func (k DocumentKind) String() string { return k.name }
 
-func KindOf(path string) DocumentKind {
-	if filepath.Ext(path) == Task.ext {
-		return Task
+func KindOf(path string) (DocumentKind, error) {
+	switch ext := filepath.Ext(path); {
+	case strings.EqualFold(ext, Task.ext):
+		return Task, nil
+	case strings.EqualFold(ext, Workflow.ext):
+		return Workflow, nil
 	}
-	return Workflow
+	return DocumentKind{}, fmt.Errorf("%s: %w", path, ErrNotADocument)
 }
 
 type ID string

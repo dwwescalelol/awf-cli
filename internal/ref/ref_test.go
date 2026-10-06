@@ -54,7 +54,7 @@ func TestParseErrors(t *testing.T) {
 
 func TestLocate(t *testing.T) {
 	s := store.New(t.TempDir())
-	v := version.FirstVersion
+	v := version.Version{Minor: 1}
 	if err := s.Write(store.Task, "diff", v, []byte("---\n---\n")); err != nil {
 		t.Fatal(err)
 	}

@@ -244,3 +244,14 @@ func parseAll(t *testing.T, in ...string) []version.Version {
 	}
 	return out
 }
+
+func TestKindOf(t *testing.T) {
+	for path, want := range map[string]DocumentKind{"a.yaml": Workflow, "a.md": Task, "A.MD": Task} {
+		if got, err := KindOf(path); err != nil || got != want {
+			t.Errorf("%s: got %v, %v, want %v", path, got, err, want)
+		}
+	}
+	if _, err := KindOf("a.txt"); !errors.Is(err, ErrNotADocument) {
+		t.Errorf("a.txt: got %v, want %v", err, ErrNotADocument)
+	}
+}

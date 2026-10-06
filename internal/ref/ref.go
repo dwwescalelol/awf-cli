@@ -26,7 +26,7 @@ func Parse(s string) (Ref, error) {
 	if strings.Contains(s, "://") {
 		return Ref{}, fmt.Errorf("%q: %w", s, ErrRemote)
 	}
-	if strings.ContainsAny(s, `/\`) || strings.EqualFold(filepath.Ext(s), ".md") {
+	if kind, _ := store.KindOf(s); strings.ContainsAny(s, `/\`) || kind == store.Task {
 		return Ref{Path: s}, nil
 	}
 	name, pin, pinned := strings.Cut(s, "@")

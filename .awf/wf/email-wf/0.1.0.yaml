@@ -1,0 +1,47 @@
+openawf: 0.1.0
+name: email-wf
+version: 0.1.0
+sha: sha256-2b546c95c50cb2257a7b501f5f635c4071301a1ac49df8d25f2f9d659c37cf64
+start: start
+orchestration:
+  check-spam:
+    fail: write-spam-report
+    pass: eval-language
+  eval-language: null
+  start: check-spam
+  write-spam-report: null
+tasks:
+  check-spam:
+    version: 0.1.0
+    sha: sha256-ef31a02af33c8a9d0ab9eddfd8badcc8ca4dc07228d68f112cf32e41afb4c4d0
+    source: .awf/task/check-spam/0.1.0.md
+    summary: What this task does.
+    outcomes:
+      - pass
+      - fail
+    body: |-
+      # check-spam
+      
+      This thing goes ahead ahd checks some spam. how it does this not sure.
+      Got some inputs, got some outputs u get me.
+  eval-language:
+    version: 0.1.0
+    sha: sha256-696724dcd46f6773b6fe1c83be82caae4561704e46d994007df10a4cf58b9aef
+    source: eval-language@0.1.0
+    summary: What this task does.
+    body: |-
+      # eval-language
+      
+      Im here evaludating some language for some reason
+  start:
+    summary: What this task does.
+    body: |
+      # start
+      
+      Describe the work this task performs, and what it returns.
+  write-spam-report:
+    summary: What this task does.
+    body: |
+      # start
+      
+      Describe the work this task performs, and what it returns.

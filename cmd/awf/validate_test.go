@@ -3,9 +3,11 @@ package main
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/dwwescalelol/awf-cli/internal/load"
 	"github.com/dwwescalelol/awf-cli/internal/store"
 )
 
@@ -34,6 +36,19 @@ func TestValidateStored(t *testing.T) {
 	_, _, err = validate([]string{"deploy"}, "", false, false)
 	if !errors.Is(err, store.ErrWrongName) || !errors.Is(err, store.ErrWrongVersion) {
 		t.Errorf("workflow: got %v, want both mismatches", err)
+	}
+	var problems load.Problems
+	if !errors.As(err, &problems) || len(problems) != 2 {
+		t.Fatalf("workflow: got %v, want two problems", err)
+	}
+	rel := filepath.Join(".awf", "wf", "deploy", "0.1.0.yaml")
+	for i, at := range [][2]int{{2, 7}, {3, 10}} {
+		if p := problems[i]; p.File != rel || p.Line != at[0] || p.Column != at[1] {
+			t.Errorf("got %s:%d:%d, want %s:%d:%d", p.File, p.Line, p.Column, rel, at[0], at[1])
+		}
+	}
+	if want := rel + `:2:7: error: name "other", stored as "deploy": ` + store.ErrWrongName.Error(); problems[0].Error() != want {
+		t.Errorf("got %q, want %q", problems[0].Error(), want)
 	}
 	if _, _, err := validate(nil, wf, false, false); err != nil {
 		t.Errorf("-f skips the check: got %v", err)

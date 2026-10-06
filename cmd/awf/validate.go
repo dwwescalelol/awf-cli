@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/dwwescalelol/awf-cli/internal/load"
 	"github.com/dwwescalelol/awf-cli/internal/store"
@@ -24,7 +25,7 @@ func validateCmd() *cobra.Command {
 			}
 			fmt.Println(formatValid(path))
 			for _, w := range warnings {
-				warn(w.Error())
+				fmt.Fprintln(os.Stderr, w)
 			}
 			return nil
 		},
@@ -49,5 +50,5 @@ func validate(args []string, file string, task, global bool) (string, []error, e
 	if err != nil {
 		return d.path, nil, err
 	}
-	return d.path, f.Compiled.Warnings(), nil
+	return d.path, f.Warnings, nil
 }

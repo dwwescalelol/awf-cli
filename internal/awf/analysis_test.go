@@ -93,7 +93,7 @@ func TestTrapStates(t *testing.T) {
 func TestCheckNoTerminal(t *testing.T) {
 	w := machine("a", map[string][]string{"a": {"b"}, "b": {"a"}})
 
-	if err := w.Check(); !errors.Is(err, ErrNoTerminal) {
+	if err := errors.Join(w.Check()...); !errors.Is(err, ErrNoTerminal) {
 		t.Fatalf("got %v, want %v", err, ErrNoTerminal)
 	}
 }
@@ -101,7 +101,7 @@ func TestCheckNoTerminal(t *testing.T) {
 func TestCheckTrap(t *testing.T) {
 	w := machine("a", map[string][]string{"a": {"b", "c"}, "b": nil, "c": {"d"}, "d": {"c"}})
 
-	err := w.Check()
+	err := errors.Join(w.Check()...)
 	if !errors.Is(err, ErrNoPath) {
 		t.Fatalf("got %v, want %v", err, ErrNoPath)
 	}
@@ -116,13 +116,19 @@ func TestCheckTrap(t *testing.T) {
 			t.Errorf("%q reported, got: %v", name, err)
 		}
 	}
+	for _, e := range w.Check() {
+		var state *StateError
+		if !errors.As(e, &state) || state.State != "c" && state.State != "d" {
+			t.Errorf("got %v, want a StateError naming c or d", e)
+		}
+	}
 }
 
 func TestCheckReachesATerminal(t *testing.T) {
 	w := machine("a", map[string][]string{"a": {"b"}, "b": nil})
 
-	if err := w.Check(); err != nil {
-		t.Fatalf("got %v, want nil", err)
+	if errs := w.Check(); len(errs) > 0 {
+		t.Fatalf("got %v, want none", errs)
 	}
 }
 
@@ -148,8 +154,8 @@ func TestWarnings(t *testing.T) {
 					t.Errorf("got %v, want %s unreachable", got[i], name)
 				}
 			}
-			if err := w.Check(); err != nil {
-				t.Errorf("Check: %v", err)
+			if errs := w.Check(); len(errs) > 0 {
+				t.Errorf("Check: %v", errs)
 			}
 		})
 	}

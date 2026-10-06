@@ -12,8 +12,9 @@ import (
 
 var ErrUnresolvedRef = errors.New("unresolved $ref")
 
-func bundle(doc *manifest.Workflow, dir string, s *store.Store) ([]string, error) {
+func bundle(doc *manifest.Workflow, dir string, s *store.Store) ([]string, map[string]string, []error) {
 	var paths []string
+	sources := map[string]string{}
 	var errs []error
 	for _, name := range sorted(doc.Tasks) {
 		entry := doc.Tasks[name]
@@ -25,12 +26,29 @@ func bundle(doc *manifest.Workflow, dir string, s *store.Store) ([]string, error
 			paths = append(paths, path)
 		}
 		if err != nil {
-			errs = append(errs, fmt.Errorf("tasks/%s: %w %q: %w", name, ErrUnresolvedRef, entry.Ref, err))
+			errs = append(errs, unresolved(name, entry.Ref, err)...)
 			continue
 		}
+		t.Source = entry.Ref
 		doc.Tasks[name] = manifest.TaskEntry{Task: t}
+		sources[name] = path
 	}
-	return paths, errors.Join(errs...)
+	return paths, sources, errs
+}
+
+func unresolved(name, ref string, err error) []error {
+	wrap := func(err error) error {
+		return fmt.Errorf("tasks/%s: %w %q: %w", name, ErrUnresolvedRef, ref, err)
+	}
+	var problems Problems
+	if !errors.As(err, &problems) {
+		return []error{onValue("tasks/"+name+"/$ref", wrap(err))}
+	}
+	out := make([]error, 0, len(problems))
+	for _, p := range problems {
+		out = append(out, &Problem{File: p.File, Line: p.Line, Column: p.Column, Err: wrap(p.Err)})
+	}
+	return out
 }
 
 func resolve(raw, dir string, s *store.Store) (*manifest.Task, string, error) {

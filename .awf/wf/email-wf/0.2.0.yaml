@@ -1,0 +1,32 @@
+openawf: 0.1.0
+name: email-wf
+version: 0.2.0
+sha: null
+start: start
+orchestration:
+  start: check-spam
+  check-spam: 
+    pass: eval-language
+    fail: write-spam-report
+  eval-language: null
+  write-spam-report: null
+tasks:
+  start:
+    summary: What this task does.
+    body: |
+      # start
+      
+      Describe the work this task performs, and what it returns.
+
+  write-spam-report:
+    summary: What this task does.
+    body: |
+      # start
+      
+      Describe the work this task performs, and what it returns.
+  
+  check-spam:
+    $ref: .awf/task/check-spam/0.1.0.md
+
+  eval-language:
+    $ref: eval-language@0.1.0

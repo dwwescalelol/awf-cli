@@ -15,12 +15,10 @@ orchestration:
   ship: null
 tasks:
   plan:
-    sha: null
     summary: Plan the change.
     body: |
       # plan
   review:
-    sha: null
     model: sonnet
     outcomes:
       - ok

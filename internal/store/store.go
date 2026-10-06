@@ -137,18 +137,18 @@ type Entry struct {
 	Version version.Version
 }
 
-func (e *Entry) Check(name string, v version.Version) error {
-	if e == nil {
+func (e *Entry) CheckName(name string) error {
+	if e == nil || name == e.ID.String() {
 		return nil
 	}
-	var errs []error
-	if name != "" && name != e.ID.String() {
-		errs = append(errs, fmt.Errorf("name %q, stored as %q: %w", name, e.ID, ErrWrongName))
+	return fmt.Errorf("name %q, stored as %q: %w", name, e.ID, ErrWrongName)
+}
+
+func (e *Entry) CheckVersion(v version.Version) error {
+	if e == nil || v.Compare(e.Version) == 0 {
+		return nil
 	}
-	if v.Compare(e.Version) != 0 {
-		errs = append(errs, fmt.Errorf("version %s, stored as %s: %w", v, e.Version, ErrWrongVersion))
-	}
-	return errors.Join(errs...)
+	return fmt.Errorf("version %s, stored as %s: %w", v, e.Version, ErrWrongVersion)
 }
 
 func Resolve(global bool) (*Store, error) {
@@ -216,6 +216,22 @@ func (s *Store) Write(kind DocumentKind, id ID, v version.Version, data []byte) 
 	if errors.Is(err, fs.ErrExist) {
 		return fmt.Errorf("%s %q version %s in %s: %w", kind, id, v, s.dir, ErrExists)
 	}
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return err
+	}
+	return f.Close()
+}
+
+func (s *Store) Replace(kind DocumentKind, id ID, v version.Version, data []byte) error {
+	path, err := s.Find(kind, id, v)
+	if err != nil {
+		return err
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, filePerm)
 	if err != nil {
 		return err
 	}

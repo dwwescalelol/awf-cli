@@ -15,7 +15,8 @@ import (
 
 func TestSealWorkflow(t *testing.T) {
 	project(t)
-	if _, err := create(store.Task, "build", false); err != nil {
+	task, err := create(store.Task, "build", false)
+	if err != nil {
 		t.Fatal(err)
 	}
 	wf, err := create(store.Workflow, "deploy", false)
@@ -33,9 +34,15 @@ func TestSealWorkflow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	path, sha, err := sealDocument([]string{"deploy"}, "", false, false, false)
+	if _, _, err := sealDocument([]string{"deploy"}, "", false, false, false); !errors.Is(err, ErrUnsealedTasks) || !strings.Contains(err.Error(), "build") {
+		t.Fatalf("seal over an unsealed task: got %v, want %v naming build", err, ErrUnsealedTasks)
+	}
+	path, sha, err := sealDocument([]string{"deploy"}, "", false, true, false)
 	if err != nil {
-		t.Fatalf("seal: %v", err)
+		t.Fatalf("seal --recursive: %v", err)
+	}
+	if f, err := load.ReadTask(task.path, nil); err != nil || f.Doc.SHA == nil {
+		t.Fatalf("task after seal --recursive: got %+v, %v, want a sha", f, err)
 	}
 	if path != wf.path || !strings.HasPrefix(sha, "sha256-") {
 		t.Errorf("got %s %s", path, sha)
@@ -48,7 +55,7 @@ func TestSealWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if doc.SHA == nil || *doc.SHA != sha || doc.Tasks["build"].Task == nil {
+	if doc.SHA == nil || *doc.SHA != sha || doc.Tasks["build"].Task == nil || doc.Tasks["build"].Task.Source != "build@0.1.0" || doc.Tasks["build"].Task.SHA == nil {
 		t.Errorf("sealed:\n%s", sealed)
 	}
 	if _, _, err := validate([]string{"deploy"}, "", false, false); err != nil {
@@ -57,9 +64,6 @@ func TestSealWorkflow(t *testing.T) {
 
 	if _, _, err := sealDocument([]string{"deploy"}, "", false, false, false); !errors.Is(err, seal.ErrSealed) {
 		t.Errorf("re-seal: got %v, want %v", err, seal.ErrSealed)
-	}
-	if _, again, err := sealDocument([]string{"deploy"}, "", false, true, false); err != nil || again != sha {
-		t.Errorf("forced re-seal: got %s, %v, want %s", again, err, sha)
 	}
 
 	rewrite(t, wf.path, "name: deploy\nversion: 0.1.0", "name: deploy\nversion: 0.2.0")
@@ -77,12 +81,6 @@ func TestSealWorkflow(t *testing.T) {
 	}
 	if _, _, err := sealDocument([]string{"deploy"}, "", false, false, false); !errors.Is(err, seal.ErrSealed) {
 		t.Errorf("re-seal edited: got %v, want %v", err, seal.ErrSealed)
-	}
-	if _, resealed, err := sealDocument([]string{"deploy"}, "", false, true, false); err != nil || resealed == sha {
-		t.Errorf("forced re-seal edited: got %s, %v", resealed, err)
-	}
-	if _, _, err := validate([]string{"deploy"}, "", false, false); err != nil {
-		t.Errorf("validate re-sealed: %v", err)
 	}
 }
 
@@ -131,7 +129,7 @@ func TestSealTask(t *testing.T) {
 	if err := os.WriteFile(wf.path, []byte(head+"tasks:\n  build:\n    $ref: build@0.1.0\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := sealDocument([]string{"deploy"}, "", false, true, false); !errors.Is(err, seal.ErrMismatch) {
+	if _, _, err := sealDocument([]string{"deploy"}, "", false, false, false); !errors.Is(err, seal.ErrMismatch) {
 		t.Errorf("seal over an edited task: got %v, want %v", err, seal.ErrMismatch)
 	}
 }

@@ -9,7 +9,6 @@ import (
 	"github.com/dwwescalelol/awf-cli/internal/browser"
 	"github.com/dwwescalelol/awf-cli/internal/page"
 	"github.com/dwwescalelol/awf-cli/internal/render"
-	"github.com/dwwescalelol/awf-cli/internal/store"
 	"github.com/spf13/cobra"
 )
 
@@ -46,12 +45,12 @@ func renderPage(args []string, file string, task, global bool) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	var out bytes.Buffer
-	if d.kind == store.Task {
-		err = page.Task(&out, d.path, d.at)
-	} else {
-		err = page.Workflow(&out, d.path, d.scope, d.at, render.Scope{}, "")
+	data, err := os.ReadFile(d.path)
+	if err != nil {
+		return nil, err
 	}
+	var out bytes.Buffer
+	err = page.Document(&out, d.kind, d.path, data, d.scope, d.at, render.Scope{}, "")
 	return out.Bytes(), err
 }
 

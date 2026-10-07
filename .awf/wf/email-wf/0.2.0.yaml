@@ -26,7 +26,7 @@ tasks:
       Describe the work this task performs, and what it returns.
   
   check-spam:
-    $ref: .awf/task/check-spam/0.1.0.md
+    $ref: .awf/task/check-spam/0.2.0.md
 
   eval-language:
     $ref: eval-language@0.1.0

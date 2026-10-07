@@ -135,8 +135,8 @@ func (src *source) report(errs []error) error {
 	return problems
 }
 
-func (src *source) warnings(errs []error) []error {
-	out := make([]error, 0, len(errs))
+func (src *source) warnings(errs []error) Problems {
+	out := make(Problems, 0, len(errs))
 	for _, err := range errs {
 		out = append(out, src.problem(err, true))
 	}

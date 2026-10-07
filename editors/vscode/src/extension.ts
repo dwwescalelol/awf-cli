@@ -1,57 +1,49 @@
+import * as path from "path";
 import * as vscode from "vscode";
-import { LanguageClient } from "vscode-languageclient/node";
-import { createClient, startClient } from "./client";
-import { isCandidate, Preview } from "./preview";
+import { LanguageClient, Middleware } from "vscode-languageclient/node";
+import { Preview } from "./preview";
 
-let client: LanguageClient | undefined;
-
-export async function activate(context: vscode.ExtensionContext): Promise<void> {
+export function activate(context: vscode.ExtensionContext): void {
+  const bundled = context.asAbsolutePath(path.join("bin", process.platform === "win32" ? "awf.exe" : "awf"));
   const output = vscode.window.createOutputChannel("OpenAWF");
-  const preview = new Preview(() => client);
-  context.subscriptions.push(output, preview);
+  const documents = new Set<string>();
+  let client: LanguageClient | undefined;
+  let pending = Promise.resolve();
+  const preview = new Preview(() => client, documents);
 
-  const start = async (): Promise<void> => {
-    client = createClient(output);
-    if (await startClient(client)) {
-      preview.refresh();
-    }
+  const middleware: Middleware = {
+    provideCodeLenses: async (doc, token, next) => {
+      const lenses = await next(doc, token);
+      const uri = doc.uri.toString();
+      const had = documents.has(uri);
+      if (lenses?.length) documents.add(uri);
+      else documents.delete(uri);
+      if (had !== documents.has(uri)) void vscode.commands.executeCommand("setContext", "awf.documents", [...documents]);
+      return lenses;
+    },
   };
 
-  const restart = async (): Promise<void> => {
-    const old = client;
-    client = undefined;
-    if (old) {
-      await old.dispose().catch(() => undefined);
-    }
-    await start();
-  };
+  const restart = () => (pending = pending.then(async () => {
+    await client?.dispose().catch(() => undefined);
+    const command = vscode.workspace.getConfiguration("awf").get<string>("path") || bundled;
+    client = new LanguageClient("awf", "OpenAWF Language Server", { command, args: ["lsp"] }, {
+      documentSelector: [{ scheme: "file", language: "yaml" }, { scheme: "file", language: "markdown" }],
+      outputChannel: output,
+      middleware,
+    });
+    await client.start().then(() => preview.refresh(), () => undefined);
+  }));
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("awf.preview", async (uri?: vscode.Uri) => {
-      const doc = uri instanceof vscode.Uri
-        ? await vscode.workspace.openTextDocument(uri)
-        : vscode.window.activeTextEditor?.document;
-      if (!doc || !isCandidate(doc)) {
-        vscode.window.showInformationMessage("AWF: open a workflow (.yaml) or task (.md) file to preview.");
-        return;
-      }
-      preview.show(doc);
+    output,
+    preview,
+    vscode.commands.registerCommand("awf.preview", (arg?: string | vscode.Uri) => {
+      const uri = arg?.toString() ?? vscode.window.activeTextEditor?.document.uri.toString();
+      if (uri) preview.show(uri);
     }),
     vscode.commands.registerCommand("awf.restartServer", restart),
-    vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration("awf.path")) {
-        void restart();
-      }
-    }),
+    vscode.workspace.onDidChangeConfiguration((e) => e.affectsConfiguration("awf.path") && restart()),
+    { dispose: () => void pending.then(() => client?.dispose()) },
   );
-
-  await start();
-}
-
-export async function deactivate(): Promise<void> {
-  if (client) {
-    const old = client;
-    client = undefined;
-    await old.dispose().catch(() => undefined);
-  }
+  void restart();
 }

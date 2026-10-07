@@ -24,6 +24,7 @@ func bundle(doc *manifest.Workflow, dir string, s *store.Store) ([]string, map[s
 		t, path, err := resolve(entry.Ref, dir, s)
 		if path != "" {
 			paths = append(paths, path)
+			sources[name] = path
 		}
 		if err != nil {
 			errs = append(errs, unresolved(name, entry.Ref, err)...)
@@ -31,7 +32,6 @@ func bundle(doc *manifest.Workflow, dir string, s *store.Store) ([]string, map[s
 		}
 		t.Source = entry.Ref
 		doc.Tasks[name] = manifest.TaskEntry{Task: t}
-		sources[name] = path
 	}
 	return paths, sources, errs
 }

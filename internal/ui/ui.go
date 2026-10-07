@@ -101,8 +101,12 @@ func (srv *server) workflow(w http.ResponseWriter, r *http.Request) {
 
 	scope, skipped, err := links(srv.store, at)
 	srv.warn(skipped)
+	var data []byte
 	if err == nil {
-		err = page.Workflow(w, at.Path, srv.store, at, scope, live)
+		data, err = os.ReadFile(at.Path)
+	}
+	if err == nil {
+		err = page.Document(w, store.Workflow, at.Path, data, srv.store, at, scope, live)
 	}
 	if err == nil || errors.Is(err, page.ErrInvalid) {
 		return

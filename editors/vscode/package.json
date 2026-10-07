@@ -12,6 +12,14 @@
     "Programming Languages",
     "Linters"
   ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "restrictedConfigurations": [
+        "awf.path"
+      ]
+    }
+  },
   "activationEvents": [
     "onLanguage:yaml",
     "onLanguage:markdown"
@@ -23,7 +31,7 @@
         "command": "awf.preview",
         "title": "Open Preview",
         "category": "AWF",
-        "icon": "$(open-preview)"
+        "icon": "$(type-hierarchy)"
       },
       {
         "command": "awf.restartServer",
@@ -35,14 +43,14 @@
       "editor/title": [
         {
           "command": "awf.preview",
-          "when": "editorLangId == yaml || editorLangId == markdown",
+          "when": "resource in awf.documents",
           "group": "navigation"
         }
       ],
       "commandPalette": [
         {
           "command": "awf.preview",
-          "when": "editorLangId == yaml || editorLangId == markdown"
+          "when": "resource in awf.documents"
         }
       ]
     },
@@ -51,8 +59,9 @@
       "properties": {
         "awf.path": {
           "type": "string",
-          "default": "awf",
-          "description": "Path to the awf executable. The extension runs `awf lsp`."
+          "default": "",
+          "description": "Path to an awf executable. Empty uses the awf bundled with the extension.",
+          "scope": "machine-overridable"
         },
         "awf.trace.server": {
           "type": "string",
@@ -68,10 +77,11 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
-    "package": "vsce package --allow-missing-repository --skip-license"
+    "vscode:prepublish": "npm run typecheck && npm run compile && ls bin/awf*",
+    "compile": "esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --sourcemap --outfile=out/extension.js",
+    "typecheck": "tsc --noEmit",
+    "bundle": "sh scripts/bundle.sh",
+    "package": "sh scripts/package.sh"
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.1"
@@ -80,6 +90,7 @@
     "@types/node": "^18.19.0",
     "@types/vscode": "~1.82.0",
     "@vscode/vsce": "^3.2.0",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "esbuild": "^0.24.0"
   }
 }

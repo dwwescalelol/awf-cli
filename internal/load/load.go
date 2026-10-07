@@ -18,7 +18,8 @@ type WorkflowFile struct {
 	Sources  map[string]string
 	Doc      *manifest.Workflow
 	Compiled *awf.Workflow
-	Warnings []error
+	Warnings Problems
+	src      *source
 }
 
 type TaskFile struct {
@@ -31,10 +32,10 @@ func ReadTask(path string, at *store.Entry) (*TaskFile, error) {
 	if err != nil {
 		return nil, err
 	}
-	return ReadTaskData(path, data, at)
+	return ParseTask(path, data, at)
 }
 
-func ReadTaskData(path string, data []byte, at *store.Entry) (*TaskFile, error) {
+func ParseTask(path string, data []byte, at *store.Entry) (*TaskFile, error) {
 	f := &TaskFile{Source: data}
 	front, body, err := manifest.SplitTask(data)
 	if err != nil {
@@ -81,20 +82,28 @@ func ReadWorkflow(path string, s *store.Store, at *store.Entry) (*WorkflowFile, 
 	if err != nil {
 		return nil, err
 	}
-	return ReadWorkflowData(path, data, s, at)
+	return ParseWorkflow(path, data, s, at)
 }
 
-func ReadWorkflowData(path string, data []byte, s *store.Store, at *store.Entry) (*WorkflowFile, error) {
+func ParseWorkflow(path string, data []byte, s *store.Store, at *store.Entry) (*WorkflowFile, error) {
 	f := &WorkflowFile{Source: data}
 	src, err := parse(path, data)
 	if err != nil {
 		return f, err
 	}
+	f.src = src
 	errs := f.read(path, s, at)
 	if f.Compiled != nil {
 		f.Warnings = src.warnings(f.Compiled.Warnings())
 	}
 	return f, src.report(errs)
+}
+
+func (f *WorkflowFile) Position(path ...string) (int, int) {
+	if f.src == nil {
+		return 1, 1
+	}
+	return f.src.position(path, true)
 }
 
 func (f *WorkflowFile) read(path string, s *store.Store, at *store.Entry) []error {
@@ -109,7 +118,7 @@ func (f *WorkflowFile) read(path string, s *store.Store, at *store.Entry) []erro
 	if len(invalid) > 0 {
 		return invalid
 	}
-	refs, sources, unresolved := bundle(f.Doc, Base(path, s), s)
+	refs, sources, unresolved := bundle(f.Doc, base(path, s), s)
 	f.Refs, f.Sources = refs, sources
 	w, errs := compile(f.Doc)
 	if errs = append(unresolved, errs...); len(errs) > 0 {
@@ -131,9 +140,9 @@ func (f *WorkflowFile) read(path string, s *store.Store, at *store.Entry) []erro
 	return nil
 }
 
-// Base is the directory a relative $ref resolves against: the parent of the
+// base is the directory a relative $ref resolves against: the parent of the
 // store in scope, or the workflow's own directory when there is no store.
-func Base(path string, s *store.Store) string {
+func base(path string, s *store.Store) string {
 	if s != nil {
 		return filepath.Dir(s.Dir())
 	}

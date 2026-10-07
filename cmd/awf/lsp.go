@@ -17,5 +17,6 @@ func lspCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().Bool("stdio", true, "serve over stdin and stdout")
+	cmd.Flags().MarkHidden("stdio")
 	return cmd
 }

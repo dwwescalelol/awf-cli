@@ -19,17 +19,17 @@ func TestRenderPage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	data, err := renderPage([]string{"deploy"}, "", false, false)
+	data, err := renderPage(request{kind: store.Workflow, args: []string{"deploy"}})
 	if err != nil || !strings.Contains(string(data), "<h1>deploy</h1>") {
 		t.Fatalf("workflow: got %v", err)
 	}
-	data, err = renderPage([]string{"build"}, "", true, false)
+	data, err = renderPage(request{kind: store.Task, args: []string{"build"}})
 	if err != nil || !strings.Contains(string(data), "<h1>build</h1>") {
 		t.Fatalf("task: got %v", err)
 	}
 
 	rewrite(t, wf.path, "start: start", "start: nowhere")
-	data, err = renderPage(nil, wf.path, false, false)
+	data, err = renderPage(request{kind: store.Workflow, file: wf.path})
 	if !errors.Is(err, page.ErrInvalid) || !strings.Contains(string(data), `class="overlay"`) {
 		t.Errorf("invalid: got %v, want %v and the page", err, page.ErrInvalid)
 	}

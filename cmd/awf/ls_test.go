@@ -18,17 +18,16 @@ func TestList(t *testing.T) {
 	}
 
 	tests := []struct {
-		name            string
-		workflows, task bool
-		want            []store.DocumentKind
+		name string
+		want []store.DocumentKind
 	}{
 		{name: "both", want: []store.DocumentKind{store.Workflow, store.Task}},
-		{name: "workflows", workflows: true, want: []store.DocumentKind{store.Workflow}},
-		{name: "tasks", task: true, want: []store.DocumentKind{store.Task}},
+		{name: "workflows", want: []store.DocumentKind{store.Workflow}},
+		{name: "tasks", want: []store.DocumentKind{store.Task}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c, err := list(tt.workflows, tt.task, false)
+			c, err := list(tt.want, false)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -43,7 +42,7 @@ func TestList(t *testing.T) {
 		})
 	}
 
-	c, err := list(false, false, false)
+	c, err := list(kinds, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +58,7 @@ func TestList(t *testing.T) {
 
 func TestListEmpty(t *testing.T) {
 	project(t)
-	c, err := list(false, false, false)
+	c, err := list(kinds, false)
 	if err != nil {
 		t.Fatal(err)
 	}

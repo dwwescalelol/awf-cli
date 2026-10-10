@@ -10,45 +10,39 @@ import (
 )
 
 func lsCmd() *cobra.Command {
-	cmd := &cobra.Command{
+	children := make([]*cobra.Command, len(kinds))
+	for i, kind := range kinds {
+		children[i] = &cobra.Command{
+			Use:   kind.String(),
+			Short: "List the " + kind.String() + "s in scope",
+			Args:  cobra.NoArgs,
+			RunE: func(cmd *cobra.Command, _ []string) error {
+				return runList(cmd, []store.DocumentKind{kind})
+			},
+		}
+	}
+	return kindCmd(&cobra.Command{
 		Use:   "ls",
 		Short: "List the workflows and tasks in scope",
-		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			global, _ := cmd.Flags().GetBool("global")
-			onlyWorkflows, _ := cmd.Flags().GetBool("wf")
-			onlyTasks, _ := cmd.Flags().GetBool("task")
-
-			c, err := list(onlyWorkflows, onlyTasks, global)
-			if err != nil {
-				return err
-			}
-			fmt.Println(formatListing(c))
-			for _, kind := range c.kinds {
-				for _, sk := range c.listings[kind].skipped {
-					warn(sk.String())
-				}
-			}
-			return nil
+			return runList(cmd, kinds)
 		},
-	}
-	cmd.Flags().BoolP("wf", "w", false, "list workflows only")
-	cmd.Flags().BoolP("task", "t", false, "list tasks only")
-	return cmd
+	}, children...)
 }
 
-func selected(workflows, tasks bool) []store.DocumentKind {
-	if !workflows && !tasks {
-		return []store.DocumentKind{store.Workflow, store.Task}
+func runList(cmd *cobra.Command, kinds []store.DocumentKind) error {
+	global, _ := cmd.Flags().GetBool("global")
+	c, err := list(kinds, global)
+	if err != nil {
+		return err
 	}
-	kinds := make([]store.DocumentKind, 0, 2)
-	if workflows {
-		kinds = append(kinds, store.Workflow)
+	fmt.Println(formatListing(c))
+	for _, kind := range c.kinds {
+		for _, sk := range c.listings[kind].skipped {
+			warn(sk.String())
+		}
 	}
-	if tasks {
-		kinds = append(kinds, store.Task)
-	}
-	return kinds
+	return nil
 }
 
 type listing struct {
@@ -62,12 +56,11 @@ type contents struct {
 	listings map[store.DocumentKind]listing
 }
 
-func list(onlyWorkflows, onlyTasks, global bool) (contents, error) {
+func list(kinds []store.DocumentKind, global bool) (contents, error) {
 	scope, err := store.Resolve(global)
 	if err != nil {
 		return contents{}, err
 	}
-	kinds := selected(onlyWorkflows, onlyTasks)
 	listings := make(map[store.DocumentKind]listing, len(kinds))
 	for _, kind := range kinds {
 		documents, skipped, err := scope.List(kind)

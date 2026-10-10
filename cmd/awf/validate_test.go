@@ -24,16 +24,16 @@ func TestValidateStored(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, _, err := validate([]string{"deploy"}, "", false, false); err != nil {
+	if _, _, err := validate(request{kind: store.Workflow, args: []string{"deploy"}}); err != nil {
 		t.Fatalf("fresh workflow: %v", err)
 	}
-	if _, _, err := validate([]string{"build"}, "", true, false); err != nil {
+	if _, _, err := validate(request{kind: store.Task, args: []string{"build"}}); err != nil {
 		t.Fatalf("fresh task: %v", err)
 	}
 
 	rewrite(t, wf, "name: deploy", "name: other")
 	rewrite(t, wf, "version: 0.1.0\nsha", "version: 3.0.0\nsha")
-	_, _, err = validate([]string{"deploy"}, "", false, false)
+	_, _, err = validate(request{kind: store.Workflow, args: []string{"deploy"}})
 	if !errors.Is(err, store.ErrWrongName) || !errors.Is(err, store.ErrWrongVersion) {
 		t.Errorf("workflow: got %v, want both mismatches", err)
 	}
@@ -50,12 +50,12 @@ func TestValidateStored(t *testing.T) {
 	if want := rel + `:2:7: error: name "other", stored as "deploy": ` + store.ErrWrongName.Error(); problems[0].Error() != want {
 		t.Errorf("got %q, want %q", problems[0].Error(), want)
 	}
-	if _, _, err := validate(nil, wf, false, false); err != nil {
+	if _, _, err := validate(request{kind: store.Workflow, file: wf}); err != nil {
 		t.Errorf("-f skips the check: got %v", err)
 	}
 
 	rewrite(t, task, "version: 0.1.0", "version: 2.0.0")
-	if _, _, err := validate([]string{"build"}, "", true, false); !errors.Is(err, store.ErrWrongVersion) {
+	if _, _, err := validate(request{kind: store.Task, args: []string{"build"}}); !errors.Is(err, store.ErrWrongVersion) {
 		t.Errorf("task: got %v, want %v", err, store.ErrWrongVersion)
 	}
 }

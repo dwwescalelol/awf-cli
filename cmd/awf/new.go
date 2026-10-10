@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/dwwescalelol/awf-cli/internal/scaffold"
@@ -11,19 +10,10 @@ import (
 )
 
 func newCmd() *cobra.Command {
-	cmd := &cobra.Command{
+	return kindCmd(&cobra.Command{
 		Use:   "new",
 		Short: "Create a workflow or task",
-		Args:  cobra.ArbitraryArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 0 {
-				return cmd.Help()
-			}
-			return fmt.Errorf("%q: %w", args[0], errUnknownKind)
-		},
-	}
-	cmd.AddCommand(newWorkflowCmd(), newTaskCmd())
-	return cmd
+	}, newKindCmd(store.Workflow), newKindCmd(store.Task))
 }
 
 const newLong = `Create a document, or a new version of one.
@@ -31,25 +21,13 @@ const newLong = `Create a document, or a new version of one.
 The version defaults to the next minor. A new version of an existing id copies
 its latest version.`
 
-var errUnknownKind = errors.New("unknown document kind, must be one of [task, workflow]")
-
-func newWorkflowCmd() *cobra.Command {
+func newKindCmd(kind store.DocumentKind) *cobra.Command {
 	return &cobra.Command{
-		Use:   "workflow <id>[@<version>]",
-		Short: "Create a workflow, or a new version of one",
+		Use:   kind.String() + " <id>[@<version>]",
+		Short: "Create a " + kind.String() + ", or a new version of one",
 		Long:  newLong,
-		Args:  cobra.ExactArgs(1),
-		RunE:  runNew(store.Workflow),
-	}
-}
-
-func newTaskCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "task <id>[@<version>]",
-		Short: "Create a task, or a new version of one",
-		Long:  newLong,
-		Args:  cobra.ExactArgs(1),
-		RunE:  runNew(store.Task),
+		Args:  targetArgs(kind),
+		RunE:  runNew(kind),
 	}
 }
 

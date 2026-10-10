@@ -15,63 +15,26 @@ import (
 )
 
 func sealCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "seal (workflow|task) <id>[@<version>] | seal -f <path>",
+	workflow := documentCmd(store.Workflow, "Write a workflow's sha after dereferencing and validating it", runSeal)
+	workflow.Long = `Write a workflow's sha after dereferencing and validating it.
+
+Seal refuses a workflow whose $ref tasks are unsealed. --recursive seals them
+first. ` + sealedNote
+	workflow.Flags().BoolP("recursive", "r", false, "seal the workflow's unsealed $ref tasks first")
+	task := documentCmd(store.Task, "Write a task's sha after validating it", runSeal)
+	task.Long = "Write a task's sha after validating it.\n\n" + sealedNote
+	return kindCmd(&cobra.Command{
+		Use:   "seal",
 		Short: "Write a document's sha after validating it",
 		Long:  "Write a document's sha after validating it.\n\n" + sealedNote,
-		Args:  cobra.ArbitraryArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			file, _ := cmd.Flags().GetString("file")
-			if file == "" && len(args) == 0 {
-				return cmd.Help()
-			}
-			if len(args) > 0 {
-				return fmt.Errorf("%q: %w", args[0], errUnknownKind)
-			}
-			return runSeal(cmd, nil, file, false)
-		},
-	}
-	cmd.Flags().StringP("file", "f", "", "path to a document file, a task when it ends in .md")
-	cmd.AddCommand(sealWorkflowCmd(), sealTaskCmd())
-	return cmd
+	}, workflow, task)
 }
 
 const sealedNote = "Sealing a document is intended to be permanent. A change requires a new version."
 
-func sealWorkflowCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "workflow <id>[@<version>]",
-		Short: "Write a workflow's sha after dereferencing and validating it",
-		Long: `Write a workflow's sha after dereferencing and validating it.
-
-Seal refuses a workflow whose $ref tasks are unsealed. --recursive seals them
-first. ` + sealedNote,
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSeal(cmd, args, "", false)
-		},
-	}
-	cmd.Flags().BoolP("recursive", "r", false, "seal the workflow's unsealed $ref tasks first")
-	return cmd
-}
-
-func sealTaskCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "task <id>[@<version>]",
-		Short: "Write a task's sha after validating it",
-		Long:  "Write a task's sha after validating it.\n\n" + sealedNote,
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSeal(cmd, args, "", true)
-		},
-	}
-}
-
-func runSeal(cmd *cobra.Command, args []string, file string, task bool) error {
-	global, _ := cmd.Flags().GetBool("global")
+func runSeal(cmd *cobra.Command, r request) error {
 	recursive, _ := cmd.Flags().GetBool("recursive")
-
-	path, sha, err := sealDocument(args, file, task, recursive, global)
+	path, sha, err := sealDocument(r, recursive)
 	if err != nil {
 		return err
 	}
@@ -79,8 +42,8 @@ func runSeal(cmd *cobra.Command, args []string, file string, task bool) error {
 	return nil
 }
 
-func sealDocument(args []string, file string, task, recursive, global bool) (string, string, error) {
-	d, err := resolve(args, file, task, global)
+func sealDocument(r request, recursive bool) (string, string, error) {
+	d, err := resolve(r)
 	if err != nil {
 		return "", "", err
 	}

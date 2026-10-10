@@ -37,10 +37,10 @@ func TestBundle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, _, err := validate([]string{"deploy"}, "", false, false); err != nil {
+	if _, _, err := validate(request{kind: store.Workflow, args: []string{"deploy"}}); err != nil {
 		t.Fatalf("validate with refs: %v", err)
 	}
-	out, err := bundle([]string{"deploy"}, "", "", false)
+	out, err := bundle(request{kind: store.Workflow, args: []string{"deploy"}}, "")
 	if err != nil {
 		t.Fatalf("bundle: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestBundle(t *testing.T) {
 	if err := os.WriteFile(bundled, out, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := validate(nil, bundled, false, false); err != nil {
+	if _, _, err := validate(request{kind: store.Workflow, file: bundled}); err != nil {
 		t.Errorf("bundled output does not validate: %v", err)
 	}
 }
@@ -72,7 +72,7 @@ func TestBundleOut(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := filepath.Join(root, "out.yaml")
-	data, err := bundle([]string{"deploy"}, "", out, false)
+	data, err := bundle(request{kind: store.Workflow, args: []string{"deploy"}}, out)
 	if err != nil {
 		t.Fatalf("bundle: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestBundlePinMismatch(t *testing.T) {
 	if err := os.WriteFile(wf.path, []byte(head+"tasks:\n  build:\n    $ref: build@0.1.0\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := bundle([]string{"deploy"}, "", "", false); !errors.Is(err, store.ErrWrongVersion) {
+	if _, err := bundle(request{kind: store.Workflow, args: []string{"deploy"}}, ""); !errors.Is(err, store.ErrWrongVersion) {
 		t.Errorf("got %v, want %v", err, store.ErrWrongVersion)
 	}
 }
@@ -118,7 +118,7 @@ func TestBundleRejectsInvalidGraph(t *testing.T) {
 	if err := os.WriteFile(path, []byte(doc), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := bundle(nil, path, "", false); !errors.Is(err, load.ErrNotATask) {
+	if _, err := bundle(request{kind: store.Workflow, file: path}, ""); !errors.Is(err, load.ErrNotATask) {
 		t.Errorf("got %v, want %v", err, load.ErrNotATask)
 	}
 }
@@ -129,7 +129,7 @@ func TestBundleRejectsTask(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := bundle(nil, task.path, "", false); !errors.Is(err, errWrongKind) {
+	if _, err := bundle(request{kind: store.Workflow, file: task.path}, ""); !errors.Is(err, errWrongKind) {
 		t.Errorf("got %v, want %v", err, errWrongKind)
 	}
 }

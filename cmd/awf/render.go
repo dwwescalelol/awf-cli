@@ -9,39 +9,36 @@ import (
 	"github.com/dwwescalelol/awf-cli/internal/browser"
 	"github.com/dwwescalelol/awf-cli/internal/page"
 	"github.com/dwwescalelol/awf-cli/internal/render"
+	"github.com/dwwescalelol/awf-cli/internal/store"
 	"github.com/spf13/cobra"
 )
 
 func renderCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "render ([-t] <id>[@<version>] | -f <path>)",
+	run := func(cmd *cobra.Command, r request) error {
+		source, _ := cmd.Flags().GetBool("source")
+		data, err := renderPage(r)
+		if err != nil && !errors.Is(err, page.ErrInvalid) {
+			return err
+		}
+		if showErr := show(data, source); showErr != nil {
+			return showErr
+		}
+		return err
+	}
+	cmd := kindCmd(&cobra.Command{
+		Use:   "render",
 		Short: "Open a workflow or task as an HTML page in the browser",
 		Long:  "Open a workflow or task as an HTML page in the browser. The page is written to a temporary file, which is left for the browser to read.",
-		Args:  cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			global, _ := cmd.Flags().GetBool("global")
-			file, _ := cmd.Flags().GetString("file")
-			task, _ := cmd.Flags().GetBool("task")
-			source, _ := cmd.Flags().GetBool("source")
-
-			data, err := renderPage(args, file, task, global)
-			if err != nil && !errors.Is(err, page.ErrInvalid) {
-				return err
-			}
-			if showErr := show(data, source); showErr != nil {
-				return showErr
-			}
-			return err
-		},
-	}
-	cmd.Flags().StringP("file", "f", "", "path to a document file, a task when it ends in .md")
-	cmd.Flags().BoolP("task", "t", false, "render a task by id")
-	cmd.Flags().Bool("source", false, "print the HTML to stdout instead of opening it")
+	},
+		documentCmd(store.Workflow, "Open a workflow as an HTML page in the browser", run),
+		documentCmd(store.Task, "Open a task as an HTML page in the browser", run),
+	)
+	cmd.PersistentFlags().Bool("source", false, "print the HTML to stdout instead of opening it")
 	return cmd
 }
 
-func renderPage(args []string, file string, task, global bool) ([]byte, error) {
-	d, err := resolve(args, file, task, global)
+func renderPage(r request) ([]byte, error) {
+	d, err := resolve(r)
 	if err != nil {
 		return nil, err
 	}

@@ -14,26 +14,23 @@ import (
 
 var ErrInvalid = errors.New("does not validate, the page shows why")
 
-func Workflow(w io.Writer, path string, s *store.Store, at *store.Entry, scope render.Scope, live string) error {
-	f, err := load.ReadWorkflow(path, s, at)
-	if f == nil {
-		return err
+func Document(w io.Writer, kind store.DocumentKind, path string, data []byte, s *store.Store, at *store.Entry, scope render.Scope, live string, read load.ReadFunc) error {
+	if kind == store.Task {
+		return task(w, path, data, at)
 	}
+	f, err := load.ParseWorkflow(path, data, s, at, read)
 	if err != nil {
 		return invalid(w, path, render.WorkflowHeader(fileName(path), f.Doc), f.Source, err, scope, live)
 	}
 	return render.Workflow(w, path, f.Source, f.Doc, f.Compiled, scope, live)
 }
 
-func Task(w io.Writer, path string, at *store.Entry) error {
+func task(w io.Writer, path string, data []byte, at *store.Entry) error {
 	name := fileName(path)
 	if at != nil {
 		name = at.ID.String()
 	}
-	f, err := load.ReadTask(path, at)
-	if f == nil {
-		return err
-	}
+	f, err := load.ParseTask(path, data, at)
 	if err != nil {
 		return invalid(w, path, render.TaskHeader(name, f.Doc), f.Source, err, render.Scope{}, "")
 	}

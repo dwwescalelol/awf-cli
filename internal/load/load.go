@@ -18,7 +18,8 @@ type WorkflowFile struct {
 	Sources  map[string]string
 	Doc      *manifest.Workflow
 	Compiled *awf.Workflow
-	Warnings []error
+	Warnings Problems
+	src      *source
 }
 
 type TaskFile struct {
@@ -31,6 +32,10 @@ func ReadTask(path string, at *store.Entry) (*TaskFile, error) {
 	if err != nil {
 		return nil, err
 	}
+	return ParseTask(path, data, at)
+}
+
+func ParseTask(path string, data []byte, at *store.Entry) (*TaskFile, error) {
 	f := &TaskFile{Source: data}
 	front, body, err := manifest.SplitTask(data)
 	if err != nil {
@@ -77,19 +82,33 @@ func ReadWorkflow(path string, s *store.Store, at *store.Entry) (*WorkflowFile, 
 	if err != nil {
 		return nil, err
 	}
+	return ParseWorkflow(path, data, s, at, nil)
+}
+
+type ReadFunc func(path string) ([]byte, error)
+
+func ParseWorkflow(path string, data []byte, s *store.Store, at *store.Entry, read ReadFunc) (*WorkflowFile, error) {
 	f := &WorkflowFile{Source: data}
 	src, err := parse(path, data)
 	if err != nil {
 		return f, err
 	}
-	errs := f.read(path, s, at)
+	f.src = src
+	errs := f.read(path, s, at, read)
 	if f.Compiled != nil {
 		f.Warnings = src.warnings(f.Compiled.Warnings())
 	}
 	return f, src.report(errs)
 }
 
-func (f *WorkflowFile) read(path string, s *store.Store, at *store.Entry) []error {
+func (f *WorkflowFile) Position(path ...string) (int, int) {
+	if f.src == nil {
+		return 1, 1
+	}
+	return f.src.position(path, true)
+}
+
+func (f *WorkflowFile) read(path string, s *store.Store, at *store.Entry, read ReadFunc) []error {
 	_, invalid := schema.Validate(f.Source)
 	var err error
 	if f.Doc, err = manifest.Unmarshal(f.Source); err != nil {
@@ -101,7 +120,7 @@ func (f *WorkflowFile) read(path string, s *store.Store, at *store.Entry) []erro
 	if len(invalid) > 0 {
 		return invalid
 	}
-	refs, sources, unresolved := bundle(f.Doc, base(path, s), s)
+	refs, sources, unresolved := bundle(f.Doc, base(path, s), s, read)
 	f.Refs, f.Sources = refs, sources
 	w, errs := compile(f.Doc)
 	if errs = append(unresolved, errs...); len(errs) > 0 {

@@ -91,3 +91,27 @@ func TestMarshalIndentedBody(t *testing.T) {
 		t.Errorf("got %q, want %q", body, wf.Tasks["a"].Task.Body)
 	}
 }
+
+func TestDeclares(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		want bool
+	}{
+		{name: "workflow", text: "openawf: 0.1.0\nname: x\n", want: true},
+		{name: "later key", text: "name: x\n\"openawf\": 0.1.0\n", want: true},
+		{name: "frontmatter", text: "---\nopenawf: 0.1.0\n---\n\nbody\n", want: true},
+		{name: "nested", text: "meta:\n  openawf: 0.1.0\n"},
+		{name: "block scalar", text: "body: |\n  openawf: 0.1.0\n"},
+		{name: "later document", text: "name: x\n---\nopenawf: 0.1.0\n"},
+		{name: "task body", text: "---\ntitle: x\n---\nopenawf: 0.1.0\n"},
+		{name: "plain scalar", text: "openawf:x\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := Declares([]byte(tt.text)); got != tt.want {
+				t.Errorf("got %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

@@ -30,11 +30,14 @@ func (p *Problem) Error() string {
 	if p.Warning {
 		severity = "warning"
 	}
-	msg := p.Err.Error()
+	return fmt.Sprintf("%s:%d:%d: %s: %s", p.File, p.Line, p.Column, severity, p.Message())
+}
+
+func (p *Problem) Message() string {
 	if y, ok := p.Err.(yaml.Error); ok {
-		msg = y.GetMessage()
+		return y.GetMessage()
 	}
-	return fmt.Sprintf("%s:%d:%d: %s: %s", p.File, p.Line, p.Column, severity, msg)
+	return p.Err.Error()
 }
 
 func (p *Problem) Unwrap() error { return p.Err }
@@ -132,8 +135,8 @@ func (src *source) report(errs []error) error {
 	return problems
 }
 
-func (src *source) warnings(errs []error) []error {
-	out := make([]error, 0, len(errs))
+func (src *source) warnings(errs []error) Problems {
+	out := make(Problems, 0, len(errs))
 	for _, err := range errs {
 		out = append(out, src.problem(err, true))
 	}

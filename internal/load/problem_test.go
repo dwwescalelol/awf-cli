@@ -72,10 +72,7 @@ func TestWarningPositions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadWorkflow: %v", err)
 	}
-	var got []*Problem
-	for _, w := range f.Warnings {
-		got = append(got, w.(*Problem))
-	}
+	got := f.Warnings
 	check(t, got, []located{{file: "unreachable.yaml", line: 7, col: 3, want: awf.ErrUnreachable}})
 	if want := fmt.Sprintf("%s:7:3: warning: orchestration/cleanup: unreachable from start", got[0].File); got[0].Error() != want {
 		t.Errorf("got %q, want %q", got[0].Error(), want)

@@ -37,7 +37,7 @@ func validateCmd() *cobra.Command {
 
 func formatValid(path string) string { return path + "\nvalid" }
 
-func validate(args []string, file string, task, global bool) (string, []error, error) {
+func validate(args []string, file string, task, global bool) (string, load.Problems, error) {
 	d, err := resolve(args, file, task, global)
 	if err != nil {
 		return "", nil, err

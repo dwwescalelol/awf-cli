@@ -28,18 +28,20 @@ The project store is the nearest `.awf` directory above the working directory, s
 
 ## Commands
 
+Commands that act on a document take its kind, then a target: `awf <command> <kind> <target>`. The kind is `workflow` or `task`. The target is `<id>[@<version>]` in the store, or `-f <path>` for a file. An unpinned `<id>` resolves to its latest version.
+
 | Command | Action |
 | --- | --- |
-| `awf new workflow <id>[@<version>]` | Create a workflow, or a new version of one. `awf new task` creates a task. |
-| `awf ls` | List the workflows and tasks in the store. |
-| `awf validate <id>[@<version>]` | Check a document against the spec. `-t` selects a task, `-f <path>` a file. |
-| `awf seal workflow <id>[@<version>]` | Validate a document and write its sha. A sealed document needs a new version to change. |
-| `awf bundle <id>[@<version>]` | Inline a workflow's `$ref` tasks into one document. |
-| `awf render <id>[@<version>]` | Open a document as an HTML page in the browser. |
+| `awf new <kind> <id>[@<version>]` | Create a document, or a new version of one. |
+| `awf ls [<kind>]` | List the documents in the store. |
+| `awf validate <kind> <target>` | Check a document against the spec. |
+| `awf seal <kind> <target>` | Validate a document and write its sha. A sealed document needs a new version to change. |
+| `awf bundle workflow <target>` | Inline a workflow's `$ref` tasks into one document. |
+| `awf render <kind> <target>` | Open a document as an HTML page in the browser. |
 | `awf ui` | Browse the store's workflows in the browser. |
 | `awf lsp` | Run the OpenAWF language server over stdio. |
 
-An unpinned `<id>` resolves to its latest version. `awf <command> --help` lists every flag.
+`awf <command> --help` lists every flag.
 
 ## Editors
 

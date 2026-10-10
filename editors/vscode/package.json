@@ -1,0 +1,96 @@
+{
+  "name": "openawf",
+  "displayName": "OpenAWF",
+  "description": "Diagnostics and live preview for OpenAWF workflows and tasks, powered by awf lsp.",
+  "version": "0.1.0",
+  "publisher": "awf",
+  "license": "UNLICENSED",
+  "engines": {
+    "vscode": "^1.82.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "restrictedConfigurations": [
+        "awf.path"
+      ]
+    }
+  },
+  "activationEvents": [
+    "onLanguage:yaml",
+    "onLanguage:markdown"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "awf.preview",
+        "title": "Open Preview",
+        "category": "AWF",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "awf.restartServer",
+        "title": "Restart Language Server",
+        "category": "AWF"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "awf.preview",
+          "when": "resource in awf.documents",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "awf.preview",
+          "when": "resource in awf.documents"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "OpenAWF",
+      "properties": {
+        "awf.path": {
+          "type": "string",
+          "default": "",
+          "description": "Path to an awf executable. Empty uses the awf bundled with the extension.",
+          "scope": "machine-overridable"
+        },
+        "awf.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the awf language server."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run typecheck && npm run compile && ls bin/awf*",
+    "compile": "esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --sourcemap --outfile=out/extension.js",
+    "typecheck": "tsc --noEmit",
+    "bundle": "sh scripts/bundle.sh",
+    "package": "sh scripts/package.sh"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^18.19.0",
+    "@types/vscode": "~1.82.0",
+    "@vscode/vsce": "^3.2.0",
+    "typescript": "^5.6.0",
+    "esbuild": "^0.24.0"
+  }
+}

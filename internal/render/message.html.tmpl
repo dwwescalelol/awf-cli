@@ -7,7 +7,8 @@
 <title>awf: {{.Title}}</title>
 <style>
 body { margin: 0; padding: 40px 16px; font: 15px/1.5 ui-sans-serif, -apple-system, system-ui, sans-serif; background: #f1f3f6; color: #16202b; }
-@media (prefers-color-scheme: dark) { body { background: #0e1217; color: #e4e8ee; } }
+@media (prefers-color-scheme: dark) { body:not(.vscode-light, .vscode-high-contrast-light) { background: #0e1217; color: #e4e8ee; } }
+body.vscode-dark, body.vscode-high-contrast:not(.vscode-high-contrast-light) { background: #0e1217; color: #e4e8ee; }
 main { max-width: 760px; margin: 0 auto; }
 h1 { font-size: 20px; margin: 0 0 6px; }
 p { margin: 0 0 16px; color: #8a5300; }

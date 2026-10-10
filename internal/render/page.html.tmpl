@@ -27,7 +27,7 @@
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not(:has(body.vscode-light, body.vscode-high-contrast-light)) {
     --bg: #0e1217;
     --surface: #161b22;
     --sunken: #11161c;
@@ -45,6 +45,24 @@
     --bad-soft: #3a1714;
     color-scheme: dark;
   }
+}
+:root:has(body.vscode-dark), :root:has(body.vscode-high-contrast:not(.vscode-high-contrast-light)) {
+  --bg: #0e1217;
+  --surface: #161b22;
+  --sunken: #11161c;
+  --ink: #e4e8ee;
+  --ink-2: #c3cad4;
+  --muted: #939eac;
+  --rule: #28303a;
+  --accent: #95a3ff;
+  --accent-soft: #202848;
+  --edge: #6f7a88;
+  --dot: #242c36;
+  --warn: #f1b85a;
+  --warn-soft: #2f2412;
+  --bad: #ff8a80;
+  --bad-soft: #3a1714;
+  color-scheme: dark;
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; scroll-padding-top: 16px; }

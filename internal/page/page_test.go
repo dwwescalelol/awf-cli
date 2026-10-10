@@ -22,13 +22,21 @@ func create(t *testing.T, s *store.Store, kind store.DocumentKind, id store.ID) 
 	return s.Path(kind, id, v)
 }
 
+func document(w *bytes.Buffer, kind store.DocumentKind, path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	return Document(w, kind, path, data, nil, nil, render.Scope{}, "", nil)
+}
+
 func TestWorkflow(t *testing.T) {
 	s := store.New(t.TempDir())
 	wf := create(t, s, store.Workflow, "deploy")
 	task := create(t, s, store.Task, "build")
 
 	var out bytes.Buffer
-	if err := Workflow(&out, wf, nil, nil, render.Scope{}, ""); err != nil {
+	if err := document(&out, store.Workflow, wf); err != nil {
 		t.Fatalf("workflow: %v", err)
 	}
 	page := out.String()
@@ -40,7 +48,7 @@ func TestWorkflow(t *testing.T) {
 	}
 
 	out.Reset()
-	if err := Task(&out, task, nil); err != nil {
+	if err := document(&out, store.Task, task); err != nil {
 		t.Fatalf("task: %v", err)
 	}
 	page = out.String()
@@ -62,7 +70,7 @@ func TestInvalid(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if err := Workflow(&out, bad, nil, nil, render.Scope{}, ""); !errors.Is(err, ErrInvalid) {
+	if err := document(&out, store.Workflow, bad); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("got %v, want %v", err, ErrInvalid)
 	}
 	page := out.String()

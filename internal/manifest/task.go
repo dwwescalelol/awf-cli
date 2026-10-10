@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/goccy/go-yaml"
@@ -28,6 +29,19 @@ func SplitTask(data []byte) ([]byte, string, error) {
 		return nil, "", ErrOpenFrontmatter
 	}
 	return data[:len(fence)+len(front)], string(bytes.TrimLeft(body, "\n")), nil
+}
+
+var (
+	declaration = regexp.MustCompile(`(?m)^["']?openawf["']?[ \t]*:(\s|$)`)
+	documentEnd = regexp.MustCompile(`(?m)^(---|\.\.\.)\s*$`)
+)
+
+func Declares(data []byte) bool {
+	data = bytes.TrimPrefix(data, []byte(fence))
+	if end := documentEnd.FindIndex(data); end != nil {
+		data = data[:end[0]]
+	}
+	return declaration.Match(data)
 }
 
 func TaskDocument(front []byte, body string) ([]byte, error) {

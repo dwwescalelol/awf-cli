@@ -18,7 +18,7 @@ func main() {
 	}
 	root.SetVersionTemplate("awf {{.Version}}\n")
 	root.PersistentFlags().Bool("global", false, "act on the global store: $AWF_HOME, deafults to ~/.awf")
-	root.AddCommand(bundleCmd(), lsCmd(), newCmd(), renderCmd(), sealCmd(), uiCmd(), validateCmd())
+	root.AddCommand(bundleCmd(), lsCmd(), lspCmd(), newCmd(), renderCmd(), sealCmd(), uiCmd(), validateCmd())
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)

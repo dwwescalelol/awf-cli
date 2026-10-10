@@ -94,6 +94,10 @@ func FindDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	return FindDirFrom(dir)
+}
+
+func FindDirFrom(dir string) (string, error) {
 	if resolved, err := filepath.EvalSymlinks(dir); err == nil {
 		dir = resolved
 	}

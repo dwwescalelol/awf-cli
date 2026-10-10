@@ -199,7 +199,7 @@ details.task.current > summary { border-left-color: var(--accent); background: v
 .task .brief { color: var(--muted); font-size: 14px; min-width: 0; }
 .tags { display: flex; gap: 6px; }
 .tag { font-size: 11.5px; font-weight: 600; padding: 2px 7px; border-radius: 5px; background: var(--sunken); color: var(--muted); border: 1px solid var(--rule); white-space: nowrap; }
-.tag.start, .tag.end { color: var(--accent); background: var(--accent-soft); border-color: transparent; }
+.tag.start, .tag.end, .tag.sealed { color: var(--accent); background: var(--accent-soft); border-color: transparent; }
 .tag.warn { color: var(--warn); background: var(--warn-soft); border-color: transparent; }
 
 .task-body { padding: 4px 18px 22px 47px; }
@@ -282,10 +282,7 @@ footer { color: var(--muted); font-size: 12.5px; text-align: center; padding: 0 
     {{if .Error}}<button class="pill invalid" type="button" data-overlay-open>Invalid</button>{{else if .SHA}}<span class="pill sealed" title="{{.SHA}}">Sealed</span>{{else}}<span class="pill">Draft</span>{{end}}
   </div>
   {{with .Summary}}<p class="summary">{{.}}</p>{{end}}
-  <dl class="meta">
-    {{with .Model}}<div><dt>Default model</dt><dd>{{.}}</dd></div>{{end}}
-    <div><dt>Sha</dt><dd>{{if .SHA}}{{.SHA}}{{else}}unsealed{{end}}</dd></div>
-  </dl>
+  {{with .Model}}<dl class="meta"><div><dt>Default model</dt><dd>{{.}}</dd></div></dl>{{end}}
   {{with .Warnings}}<ul class="warnings" aria-label="Warnings">{{range .}}<li>{{.}}</li>{{end}}</ul>{{end}}
 </header>
 
@@ -294,7 +291,7 @@ footer { color: var(--muted); font-size: 12.5px; text-align: center; padding: 0 
   <aside class="graph" aria-label="Orchestration">
     <div class="legend">
       <span><svg width="10" height="10" aria-hidden="true"><circle cx="5" cy="5" r="4" fill="currentColor"/></svg>start</span>
-      <span><svg width="16" height="12" aria-hidden="true"><rect x=".5" y=".5" width="15" height="11" rx="3" fill="none" stroke="currentColor"/><rect x="3" y="3" width="10" height="6" rx="1.5" fill="none" stroke="currentColor"/></svg>ends the run</span>
+      <span><svg width="16" height="12" aria-hidden="true"><rect x=".5" y=".5" width="15" height="11" rx="3" fill="none" stroke="currentColor"/><rect x="3" y="3" width="10" height="6" rx="1.5" fill="none" stroke="currentColor"/></svg>terminal</span>
     </div>
     {{.Graph}}
   </aside>
@@ -315,7 +312,7 @@ footer { color: var(--muted); font-size: 12.5px; text-align: center; padding: 0 
             <span class="brief">{{.Summary}}</span>
             <span class="tags">
               {{if .Start}}<span class="tag start">start</span>{{end}}
-              {{if .Terminal}}<span class="tag end">end</span>{{end}}
+              {{with .SHA}}<span class="tag sealed" title="{{.}}">sealed</span>{{end}}
               {{if .Unreachable}}<span class="tag warn">unreachable</span>{{end}}
             </span>
           </summary>
@@ -331,13 +328,12 @@ footer { color: var(--muted); font-size: 12.5px; text-align: center; padding: 0 
                   <li>{{if .On}}<span class="on">{{.On}}</span><span class="arrow">→</span>{{end}}<a href="#task-{{.To}}">{{.To}}</a>{{if or .Retries .Resume}}<span class="policy">{{with .Retries}}{{.}} retries{{end}}{{if and .Retries .Resume}}, {{end}}{{if .Resume}}resumes the session{{end}}</span>{{end}}</li>
                   {{end}}
                 </ul>
-                {{else}}Ends the run{{end}}
+                {{else}}<span class="tag end">terminal</span>{{end}}
               </dd>
               {{else}}
               {{with .Outcomes}}<dt>Outcomes</dt><dd class="chips">{{range .}}<code class="chip">{{.}}</code>{{end}}</dd>{{end}}
               {{end}}
               {{with .Uses}}<dt>MCP</dt><dd class="chips">{{range .}}{{if $.Graph}}<a class="chip" href="#mcp-{{.}}">{{.}}</a>{{else}}<code class="chip">{{.}}</code>{{end}}{{end}}</dd>{{end}}
-              {{with .SHA}}<dt>Sha</dt><dd><code>{{.}}</code></dd>{{end}}
             </dl>
             {{if or .Input .Output}}
             <div class="io">

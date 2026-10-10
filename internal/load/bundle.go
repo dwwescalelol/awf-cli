@@ -3,6 +3,7 @@ package load
 import (
 	"errors"
 	"fmt"
+	"os"
 
 	"github.com/dwwescalelol/awf-cli/internal/manifest"
 	"github.com/dwwescalelol/awf-cli/internal/ref"
@@ -12,7 +13,7 @@ import (
 
 var ErrUnresolvedRef = errors.New("unresolved $ref")
 
-func bundle(doc *manifest.Workflow, dir string, s *store.Store) ([]string, map[string]string, []error) {
+func bundle(doc *manifest.Workflow, dir string, s *store.Store, read ReadFunc) ([]string, map[string]string, []error) {
 	var paths []string
 	sources := map[string]string{}
 	var errs []error
@@ -21,9 +22,10 @@ func bundle(doc *manifest.Workflow, dir string, s *store.Store) ([]string, map[s
 		if entry.Task != nil {
 			continue
 		}
-		t, path, err := resolve(entry.Ref, dir, s)
+		t, path, err := resolve(entry.Ref, dir, s, read)
 		if path != "" {
 			paths = append(paths, path)
+			sources[name] = path
 		}
 		if err != nil {
 			errs = append(errs, unresolved(name, entry.Ref, err)...)
@@ -31,7 +33,6 @@ func bundle(doc *manifest.Workflow, dir string, s *store.Store) ([]string, map[s
 		}
 		t.Source = entry.Ref
 		doc.Tasks[name] = manifest.TaskEntry{Task: t}
-		sources[name] = path
 	}
 	return paths, sources, errs
 }
@@ -51,7 +52,7 @@ func unresolved(name, ref string, err error) []error {
 	return out
 }
 
-func resolve(raw, dir string, s *store.Store) (*manifest.Task, string, error) {
+func resolve(raw, dir string, s *store.Store, read ReadFunc) (*manifest.Task, string, error) {
 	r, err := ref.Parse(raw)
 	if err != nil {
 		return nil, "", err
@@ -64,7 +65,14 @@ func resolve(raw, dir string, s *store.Store) (*manifest.Task, string, error) {
 	if r.Path == "" {
 		at = &store.Entry{Path: path, ID: r.ID, Version: r.Version}
 	}
-	f, err := ReadTask(path, at)
+	if read == nil {
+		read = os.ReadFile
+	}
+	data, err := read(path)
+	if err != nil {
+		return nil, path, err
+	}
+	f, err := ParseTask(path, data, at)
 	if err != nil {
 		return nil, path, err
 	}

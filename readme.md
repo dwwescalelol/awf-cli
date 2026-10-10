@@ -1,29 +1,59 @@
-go cli for doing oipperations on the OpenAWF format wihcih is specified in this repo: https://github.com/dwwescalelol/OpenAWF-Specification
+# awf
 
-this cli tool will have opperations around using the workflows, and will provide ways to extract into tasks which are represented as .md fiels with frontmatter - jus tlike claude skills. 
+`awf` is a command-line implementation of the [OpenAWF Specification](https://github.com/dwwescalelol/OpenAWF-Specification). OpenAWF describes an agentic workflow as a single document: a finite-state machine of tasks that runs from a start task to a terminal one.
 
-the cli tool will have
+`awf` validates, seals, bundles and renders OpenAWF workflows and tasks. It supports spec version 0.1.0.
 
-awf validate - is the document runnable and if sealed has not been tampered with
-awf seal - seal the document with its sha
-awf reder - swagger like style with html. maybe also show in tui.
-awf run - execute the FSM
-awf install - installs a workflow/task (-t for task, -w for workflwo. -w as default) 
-awf bundle - resolves external $refs and complies into one documetn
-awf extract - extract tasks to .md files. the orchestration is to do with the workflow, and is not extracted.
-awf ls (lists wfs with versions, if path supplied will try to list workflow tasks)
-awf -v (version of cli)
+## Install
 
+```sh
+go install github.com/dwwescalelol/awf-cli/cmd/awf@latest
+```
 
+## Documents
 
-scopes
-~/.awf/ for global thigns --global
-./.awf/ for project lvl things --local
-eveyrhtying will deafult to --local, sometiems the global is the local
+A workflow is a `.yaml` file with a top-level `openawf` key. A task is a `.md` file whose YAML frontmatter has an `openawf` key, with the task's instructions in the Markdown body. A workflow can reference a task with `$ref`, either by path or as `<id>@<version>`.
 
+## Stores
 
+`awf` keeps documents in a store, a `.awf` directory:
 
+```
+.awf/
+  wf/<id>/<version>.yaml
+  task/<id>/<version>.md
+```
 
+The project store is the nearest `.awf` directory above the working directory, searched up to the home directory. The global store is `$AWF_HOME`, or `~/.awf` when it is unset. `--global` selects the global store.
 
-TUI interaace
-we re using go and the package bubble tea v2. nothing else
+## Commands
+
+| Command | Action |
+| --- | --- |
+| `awf new workflow <id>[@<version>]` | Create a workflow, or a new version of one. `awf new task` creates a task. |
+| `awf ls` | List the workflows and tasks in the store. |
+| `awf validate <id>[@<version>]` | Check a document against the spec. `-t` selects a task, `-f <path>` a file. |
+| `awf seal workflow <id>[@<version>]` | Validate a document and write its sha. A sealed document needs a new version to change. |
+| `awf bundle <id>[@<version>]` | Inline a workflow's `$ref` tasks into one document. |
+| `awf render <id>[@<version>]` | Open a document as an HTML page in the browser. |
+| `awf ui` | Browse the store's workflows in the browser. |
+| `awf lsp` | Run the OpenAWF language server over stdio. |
+
+An unpinned `<id>` resolves to its latest version. `awf <command> --help` lists every flag.
+
+## Editors
+
+`awf lsp` gives editors diagnostics, go-to-definition on `$ref`, and a live preview. [editors/](editors/README.md) covers the VS Code extension and Neovim setup.
+
+## Development
+
+```sh
+go test ./...
+go build ./cmd/awf
+```
+
+## License
+
+MIT. See [LICENSE](LICENSE).
+
+---

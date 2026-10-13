@@ -62,11 +62,11 @@ func targetArgs(kind store.DocumentKind) cobra.PositionalArgs {
 		case cmd.Flags().Changed("file") && file == "":
 			return errNoPath
 		case len(args) > 1:
-			return fmt.Errorf("accepts one %s <id>[@<version>], received %d", kind, len(args))
+			return fmt.Errorf("accepts one %s [<namespace>#]<id>[@<version>], received %d", kind, len(args))
 		case len(args) == 1 && file != "":
 			return errIDAndFile
 		case len(args) == 0 && file == "":
-			return fmt.Errorf("requires a %s <id>[@<version>]", kind)
+			return fmt.Errorf("requires a %s [<namespace>#]<id>[@<version>]", kind)
 		}
 		return nil
 	}
@@ -94,7 +94,7 @@ type request struct {
 // documentCmd runs on one document of kind, named by id or by -f.
 func documentCmd(kind store.DocumentKind, short string, run func(*cobra.Command, request) error) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   kind.String() + " (<id>[@<version>] | -f <path>)",
+		Use:   kind.String() + " ([<namespace>#]<id>[@<version>] | -f <path>)",
 		Short: short,
 		Args:  targetArgs(kind),
 		RunE: func(cmd *cobra.Command, args []string) error {

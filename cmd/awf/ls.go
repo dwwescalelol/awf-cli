@@ -77,10 +77,11 @@ func formatListing(c contents) string {
 	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
 	for _, kind := range c.kinds {
 		for _, d := range c.listings[kind].documents {
+			fmt.Fprintf(w, "%s\t", d.ID.Namespace())
 			if len(c.kinds) > 1 {
 				fmt.Fprintf(w, "%s\t", kind)
 			}
-			fmt.Fprintf(w, "%s\t%s\n", d.ID, versions(d))
+			fmt.Fprintf(w, "%s\t%s\n", d.ID.Name(), versions(d))
 		}
 	}
 	w.Flush()

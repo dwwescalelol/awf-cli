@@ -23,7 +23,7 @@ its latest version.`
 
 func newKindCmd(kind store.DocumentKind) *cobra.Command {
 	return &cobra.Command{
-		Use:   kind.String() + " <id>[@<version>]",
+		Use:   kind.String() + " [<namespace>#]<id>[@<version>]",
 		Short: "Create a " + kind.String() + ", or a new version of one",
 		Long:  newLong,
 		Args:  targetArgs(kind),

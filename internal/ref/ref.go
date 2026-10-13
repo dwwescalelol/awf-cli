@@ -11,8 +11,8 @@ import (
 )
 
 var (
-	ErrRemote   = errors.New("remote $ref unsupported, install the task and reference it as <id>@<version>")
-	ErrUnpinned = errors.New("no version, reference a stored task as <id>@<version>")
+	ErrRemote   = errors.New("remote $ref unsupported, install the task and reference it as <namespace>#<id>@<version>")
+	ErrUnpinned = errors.New("no version, reference a stored task as [<namespace>#]<id>@<version>")
 	ErrNoStore  = errors.New("no store to resolve an id in")
 )
 

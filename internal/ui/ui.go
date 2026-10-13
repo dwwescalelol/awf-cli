@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"slices"
 	"strconv"
@@ -156,7 +157,7 @@ func (srv *server) warn(skipped []store.Skipped) {
 }
 
 func workflowURL(id store.ID, v version.Version) string {
-	return "/wf/" + id.String() + "/" + v.String()
+	return "/wf/" + url.PathEscape(id.String()) + "/" + v.String()
 }
 
 func links(s *store.Store, current *store.Entry) (render.Scope, []store.Skipped, error) {

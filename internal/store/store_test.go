@@ -144,14 +144,16 @@ func TestPath(t *testing.T) {
 	s := New(filepath.Join("proj", ".awf"))
 	tests := []struct {
 		kind DocumentKind
+		id   ID
 		want string
 	}{
-		{Workflow, filepath.Join("proj", ".awf", "wf", "feat-dev", "0.1.0.yaml")},
-		{Task, filepath.Join("proj", ".awf", "task", "feat-dev", "0.1.0.md")},
+		{Workflow, "feat-dev", filepath.Join("proj", ".awf", "_", "workflow", "feat-dev", "0.1.0.yaml")},
+		{Task, "feat-dev", filepath.Join("proj", ".awf", "_", "task", "feat-dev", "0.1.0.md")},
+		{Workflow, "github.com/maya/flows#feat-dev", filepath.Join("proj", ".awf", "github.com", "maya", "flows", "workflow", "feat-dev", "0.1.0.yaml")},
 	}
 	for _, tt := range tests {
-		t.Run(tt.kind.String(), func(t *testing.T) {
-			if got := s.Path(tt.kind, "feat-dev", version.Version{Minor: 1}); got != tt.want {
+		t.Run(tt.id.String()+" "+tt.kind.String(), func(t *testing.T) {
+			if got := s.Path(tt.kind, tt.id, version.Version{Minor: 1}); got != tt.want {
 				t.Errorf("got %q, want %q", got, tt.want)
 			}
 		})
@@ -182,10 +184,10 @@ func TestCreateAndList(t *testing.T) {
 	write(Task, "create-diff", "0.1.0")
 
 	// Empty ids and files of the wrong kind are not versions.
-	if err := os.MkdirAll(filepath.Join(s.Dir(), "wf", "drafted"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(s.Dir(), "_", "workflow", "drafted"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(s.Dir(), "wf", "ship", "notes.md"), nil, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(s.Dir(), "_", "workflow", "ship", "notes.md"), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -202,7 +204,7 @@ func TestCreateAndList(t *testing.T) {
 	}
 
 	wantSkipped := []Skipped{{
-		Path:   filepath.Join(s.Dir(), "wf", "ship", "notes.md"),
+		Path:   filepath.Join(s.Dir(), "_", "workflow", "ship", "notes.md"),
 		Reason: ErrNotADocument,
 	}}
 	sameSkip := func(a, b Skipped) bool { return a.Path == b.Path && errors.Is(a.Reason, b.Reason) }
@@ -229,6 +231,54 @@ func TestNewID(t *testing.T) {
 	}
 	if got, err := NewID("feat-dev"); err != nil || got != ID("feat-dev") {
 		t.Errorf("NewID(\"feat-dev\"): got %q, %v", got, err)
+	}
+
+	badNamespaces := []string{"#feat", "_#feat", "a//b#feat", "../etc#feat", "a/workflow#feat", "task#feat", "Maya#feat", "a/.b#feat"}
+	for _, in := range badNamespaces {
+		if got, err := NewID(in); !errors.Is(err, ErrNotANamespace) {
+			t.Errorf("NewID(%q): got %q, %v, want %v", in, got, err, ErrNotANamespace)
+		}
+	}
+	id, err := NewID("github.com/maya/flows#feat-dev")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id.Namespace() != "github.com/maya/flows" || id.Name() != "feat-dev" {
+		t.Errorf("got %q and %q", id.Namespace(), id.Name())
+	}
+	if local := ID("feat-dev"); local.Namespace() != Local || local.Name() != "feat-dev" {
+		t.Errorf("got %q and %q", local.Namespace(), local.Name())
+	}
+}
+
+func TestListNamespaces(t *testing.T) {
+	s := New(filepath.Join(t.TempDir(), ".awf"))
+	for _, id := range []ID{"review", "github.com/maya/flows#review", "github.com/maya/flows/sub#lint"} {
+		if err := s.Write(Workflow, id, version.Version{Major: 1}, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.Write(Task, "github.com/maya/flows#review", version.Version{Major: 1}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(s.Dir(), "workflow", "old"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	got, skipped, err := s.List(Workflow)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	want := []Document{
+		{ID: "review", Versions: parseAll(t, "1.0.0")},
+		{ID: "github.com/maya/flows/sub#lint", Versions: parseAll(t, "1.0.0")},
+		{ID: "github.com/maya/flows#review", Versions: parseAll(t, "1.0.0")},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+	if len(skipped) != 1 || skipped[0].Path != filepath.Join(s.Dir(), "workflow") || !errors.Is(skipped[0].Reason, ErrNotANamespace) {
+		t.Errorf("skipped: got %v, want %s as %v", skipped, filepath.Join(s.Dir(), "workflow"), ErrNotANamespace)
 	}
 }
 

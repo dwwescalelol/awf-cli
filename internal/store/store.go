@@ -15,19 +15,21 @@ import (
 
 const (
 	EnvHome  = "AWF_HOME"
+	Local    = "_"
 	dirName  = ".awf"
 	dirPerm  = 0o755
 	filePerm = 0o644
 )
 
 var (
-	ErrNotAnID      = errors.New("not an id")
-	ErrNotADocument = errors.New("not a document file")
-	ErrNestedDir    = errors.New("unexpected directory")
-	ErrNotInstalled = errors.New("not installed")
-	ErrExists       = errors.New("already exists")
-	ErrWrongName    = errors.New("name does not match the id it is stored under")
-	ErrWrongVersion = errors.New("version does not match the version it is stored under")
+	ErrNotAnID       = errors.New("not an id")
+	ErrNotANamespace = errors.New("not a namespace")
+	ErrNotADocument  = errors.New("not a document file")
+	ErrNestedDir     = errors.New("unexpected directory")
+	ErrNotInstalled  = errors.New("not installed")
+	ErrExists        = errors.New("already exists")
+	ErrWrongName     = errors.New("name does not match the id it is stored under")
+	ErrWrongVersion  = errors.New("version does not match the version it is stored under")
 )
 
 type DocumentKind struct {
@@ -37,7 +39,7 @@ type DocumentKind struct {
 }
 
 var (
-	Workflow = DocumentKind{dir: "wf", ext: ".yaml", name: "workflow"}
+	Workflow = DocumentKind{dir: "workflow", ext: ".yaml", name: "workflow"}
 	Task     = DocumentKind{dir: "task", ext: ".md", name: "task"}
 )
 
@@ -55,16 +57,56 @@ func KindOf(path string) (DocumentKind, error) {
 
 type ID string
 
-var idPattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+var (
+	idPattern      = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+	segmentPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
+)
 
 func NewID(s string) (ID, error) {
-	if !idPattern.MatchString(s) {
+	name := s
+	if namespace, after, qualified := strings.Cut(s, "#"); qualified {
+		if !validNamespace(namespace) {
+			return "", fmt.Errorf("%q: %w", s, ErrNotANamespace)
+		}
+		name = after
+	}
+	if !idPattern.MatchString(name) {
 		return "", fmt.Errorf("%q: %w", s, ErrNotAnID)
 	}
 	return ID(s), nil
 }
 
+func newIDIn(namespace, name string) (ID, error) {
+	if namespace != Local {
+		name = namespace + "#" + name
+	}
+	return NewID(name)
+}
+
+func validNamespace(s string) bool {
+	for segment := range strings.SplitSeq(s, "/") {
+		if !segmentPattern.MatchString(segment) || segment == Workflow.dir || segment == Task.dir {
+			return false
+		}
+	}
+	return true
+}
+
 func (id ID) String() string { return string(id) }
+
+func (id ID) Namespace() string {
+	if namespace, _, qualified := strings.Cut(string(id), "#"); qualified {
+		return namespace
+	}
+	return Local
+}
+
+func (id ID) Name() string {
+	if _, name, qualified := strings.Cut(string(id), "#"); qualified {
+		return name
+	}
+	return string(id)
+}
 
 type Document struct {
 	ID       ID
@@ -142,10 +184,10 @@ type Entry struct {
 }
 
 func (e *Entry) CheckName(name string) error {
-	if e == nil || name == e.ID.String() {
+	if e == nil || name == e.ID.Name() {
 		return nil
 	}
-	return fmt.Errorf("name %q, stored as %q: %w", name, e.ID, ErrWrongName)
+	return fmt.Errorf("name %q, stored as %q: %w", name, e.ID.Name(), ErrWrongName)
 }
 
 func (e *Entry) CheckVersion(v version.Version) error {
@@ -169,12 +211,12 @@ func Resolve(global bool) (*Store, error) {
 
 func (s *Store) Dir() string { return s.dir }
 
-func (s *Store) kindDir(kind DocumentKind) string {
-	return filepath.Join(s.dir, kind.dir)
+func (s *Store) kindDir(namespace string, kind DocumentKind) string {
+	return filepath.Join(s.dir, filepath.FromSlash(namespace), kind.dir)
 }
 
 func (s *Store) docDir(kind DocumentKind, id ID) string {
-	return filepath.Join(s.kindDir(kind), string(id))
+	return filepath.Join(s.kindDir(id.Namespace(), kind), id.Name())
 }
 
 func (s *Store) Path(kind DocumentKind, id ID, v version.Version) string {
@@ -247,7 +289,50 @@ func (s *Store) Replace(kind DocumentKind, id ID, v version.Version, data []byte
 }
 
 func (s *Store) List(kind DocumentKind) ([]Document, []Skipped, error) {
-	root := s.kindDir(kind)
+	var documents []Document
+	var skipped []Skipped
+	err := filepath.WalkDir(s.dir, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil || !entry.IsDir() || path == s.dir {
+			return err
+		}
+		switch entry.Name() {
+		case kind.dir:
+		case Workflow.dir, Task.dir:
+			return filepath.SkipDir
+		default:
+			if strings.HasPrefix(entry.Name(), ".") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		rel, err := filepath.Rel(s.dir, filepath.Dir(path))
+		if err != nil {
+			return err
+		}
+		namespace := filepath.ToSlash(rel)
+		if namespace != Local && !validNamespace(namespace) {
+			skipped = append(skipped, Skipped{Path: path, Reason: ErrNotANamespace})
+			return filepath.SkipDir
+		}
+		found, foundSkipped, err := s.listIn(namespace, kind)
+		if err != nil {
+			return err
+		}
+		documents = append(documents, found...)
+		skipped = append(skipped, foundSkipped...)
+		return filepath.SkipDir
+	})
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil, nil
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	return documents, skipped, nil
+}
+
+func (s *Store) listIn(namespace string, kind DocumentKind) ([]Document, []Skipped, error) {
+	root := s.kindDir(namespace, kind)
 	entries, err := os.ReadDir(root)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil, nil
@@ -268,7 +353,7 @@ func (s *Store) List(kind DocumentKind) ([]Document, []Skipped, error) {
 			skipped = append(skipped, Skipped{Path: path, Reason: ErrNotADocument})
 			continue
 		}
-		id, err := NewID(name)
+		id, err := newIDIn(namespace, name)
 		if err != nil {
 			skipped = append(skipped, Skipped{Path: path, Reason: ErrNotAnID})
 			continue

@@ -161,7 +161,7 @@ func TestCreateGlobal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := filepath.Join(root, "home", "task", "create-diff", "0.1.0.md")
+	want := filepath.Join(root, "home", "_", "task", "create-diff", "0.1.0.md")
 	if path != want {
 		t.Errorf("got %s, want %s", path, want)
 	}
@@ -172,7 +172,7 @@ func TestCreateUnreadable(t *testing.T) {
 	if _, err := create(store.Task, "create-diff@0.3.0", false); err != nil {
 		t.Fatal(err)
 	}
-	dir := filepath.Join(root, ".awf", "task", "create-diff")
+	dir := filepath.Join(root, ".awf", "_", "task", "create-diff")
 	if err := os.Chmod(dir, 0o300); err != nil {
 		t.Fatal(err)
 	}

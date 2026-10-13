@@ -20,9 +20,11 @@ A workflow is a `.yaml` file with a top-level `openawf` key. A task is a `.md` f
 
 ```
 .awf/
-  wf/<id>/<version>.yaml
-  task/<id>/<version>.md
+  <namespace>/workflow/<id>/<version>.yaml
+  <namespace>/task/<id>/<version>.md
 ```
+
+Your own documents live in the `_` namespace. An id names one as `<id>`, and a document in another namespace as `<namespace>#<id>`.
 
 The project store is the nearest `.awf` directory above the working directory, searched up to the home directory. The global store is `$AWF_HOME`, or `~/.awf` when it is unset. `--global` selects the global store.
 

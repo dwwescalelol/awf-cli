@@ -34,6 +34,7 @@ Commands that act on a document take its kind, then a target: `awf <command> <ki
 
 | Command | Action |
 | --- | --- |
+| `awf init` | Create a project store in the working directory. Refuses inside an existing project store. |
 | `awf new <kind> <id>[@<version>]` | Create a document, or a new version of one. |
 | `awf ls [<kind>]` | List the documents in the store. |
 | `awf validate <kind> <target>` | Check a document against the spec. |

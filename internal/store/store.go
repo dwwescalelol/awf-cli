@@ -30,6 +30,7 @@ var (
 	ErrExists        = errors.New("already exists")
 	ErrWrongName     = errors.New("name does not match the id it is stored under")
 	ErrWrongVersion  = errors.New("version does not match the version it is stored under")
+	ErrInStore       = errors.New("already inside a project store")
 )
 
 type DocumentKind struct {
@@ -209,6 +210,27 @@ func Resolve(global bool) (*Store, error) {
 		return nil, err
 	}
 	return New(dir), nil
+}
+
+func Init(dir string) (*Store, error) {
+	found, err := FindDirFrom(dir)
+	if err != nil {
+		return nil, err
+	}
+	global, err := GlobalDir()
+	if err != nil {
+		return nil, err
+	}
+	if found != global {
+		return nil, fmt.Errorf("%s: %w", found, ErrInStore)
+	}
+	s := New(filepath.Join(dir, dirName))
+	for _, kind := range []DocumentKind{Workflow, Task} {
+		if err := os.MkdirAll(s.kindDir(Local, kind), dirPerm); err != nil {
+			return nil, err
+		}
+	}
+	return s, nil
 }
 
 func (s *Store) Dir() string { return s.dir }

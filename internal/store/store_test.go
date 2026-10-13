@@ -147,9 +147,9 @@ func TestPath(t *testing.T) {
 		id   ID
 		want string
 	}{
-		{Workflow, "feat-dev", filepath.Join("proj", ".awf", Local, "workflow", "feat-dev", "0.1.0.yaml")},
-		{Task, "feat-dev", filepath.Join("proj", ".awf", Local, "task", "feat-dev", "0.1.0.md")},
-		{Workflow, "github.com/maya/flows#feat-dev", filepath.Join("proj", ".awf", "github.com", "maya", "flows", "workflow", "feat-dev", "0.1.0.yaml")},
+		{Workflow, "feat-dev", filepath.Join("proj", ".awf", Local, Workflow.dir, "feat-dev", "0.1.0.yaml")},
+		{Task, "feat-dev", filepath.Join("proj", ".awf", Local, Task.dir, "feat-dev", "0.1.0.md")},
+		{Workflow, "github.com/maya/flows#feat-dev", filepath.Join("proj", ".awf", "github.com", "maya", "flows", Workflow.dir, "feat-dev", "0.1.0.yaml")},
 	}
 	for _, tt := range tests {
 		t.Run(tt.id.String()+" "+tt.kind.String(), func(t *testing.T) {
@@ -184,10 +184,10 @@ func TestCreateAndList(t *testing.T) {
 	write(Task, "create-diff", "0.1.0")
 
 	// Empty ids and files of the wrong kind are not versions.
-	if err := os.MkdirAll(filepath.Join(s.Dir(), Local, "workflow", "drafted"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(s.Dir(), Local, Workflow.dir, "drafted"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(s.Dir(), Local, "workflow", "ship", "notes.md"), nil, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(s.Dir(), Local, Workflow.dir, "ship", "notes.md"), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -204,7 +204,7 @@ func TestCreateAndList(t *testing.T) {
 	}
 
 	wantSkipped := []Skipped{{
-		Path:   filepath.Join(s.Dir(), Local, "workflow", "ship", "notes.md"),
+		Path:   filepath.Join(s.Dir(), Local, Workflow.dir, "ship", "notes.md"),
 		Reason: ErrNotADocument,
 	}}
 	sameSkip := func(a, b Skipped) bool { return a.Path == b.Path && errors.Is(a.Reason, b.Reason) }
@@ -233,7 +233,7 @@ func TestNewID(t *testing.T) {
 		t.Errorf("NewID(\"feat-dev\"): got %q, %v", got, err)
 	}
 
-	badNamespaces := []string{"#feat", "_#feat", "a//b#feat", "../etc#feat", "a/workflow#feat", "task#feat", "Maya#feat", "a/.b#feat"}
+	badNamespaces := []string{"#feat", "_#feat", "a//b#feat", "../etc#feat", "a/" + Workflow.dir + "#feat", Task.dir + "#feat", "Maya#feat", "a/.b#feat"}
 	for _, in := range badNamespaces {
 		if got, err := NewID(in); !errors.Is(err, ErrNotANamespace) {
 			t.Errorf("NewID(%q): got %q, %v, want %v", in, got, err, ErrNotANamespace)
@@ -261,7 +261,7 @@ func TestListNamespaces(t *testing.T) {
 	if err := s.Write(Task, "github.com/maya/flows#review", version.Version{Major: 1}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(s.Dir(), "workflow", "old"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(s.Dir(), Workflow.dir, "old"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -277,8 +277,8 @@ func TestListNamespaces(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %v, want %v", got, want)
 	}
-	if len(skipped) != 1 || skipped[0].Path != filepath.Join(s.Dir(), "workflow") || !errors.Is(skipped[0].Reason, ErrNotANamespace) {
-		t.Errorf("skipped: got %v, want %s as %v", skipped, filepath.Join(s.Dir(), "workflow"), ErrNotANamespace)
+	if len(skipped) != 1 || skipped[0].Path != filepath.Join(s.Dir(), Workflow.dir) || !errors.Is(skipped[0].Reason, ErrNotANamespace) {
+		t.Errorf("skipped: got %v, want %s as %v", skipped, filepath.Join(s.Dir(), Workflow.dir), ErrNotANamespace)
 	}
 }
 

@@ -45,6 +45,8 @@ var (
 
 func (k DocumentKind) String() string { return k.name }
 
+func (k DocumentKind) Dir() string { return k.dir }
+
 func KindOf(path string) (DocumentKind, error) {
 	switch ext := filepath.Ext(path); {
 	case strings.EqualFold(ext, Task.ext):

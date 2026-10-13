@@ -140,6 +140,37 @@ func TestResolveCreatesNothing(t *testing.T) {
 	}
 }
 
+func TestInit(t *testing.T) {
+	tests := []struct {
+		name string
+		dirs []string
+		wd   string
+		want error
+	}{
+		{name: "outside a project", dirs: []string{"proj"}, wd: "proj"},
+		{name: "under home", dirs: []string{"home/.awf", "home/proj"}, wd: "home/proj"},
+		{name: "in a project store", dirs: []string{"proj/.awf"}, wd: "proj", want: ErrInStore},
+		{name: "below a project store", dirs: []string{"proj/.awf", "proj/a/b"}, wd: "proj/a/b", want: ErrInStore},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root, _ := setup(t, tt.dirs, tt.wd)
+			s, err := Init(filepath.Join(root, tt.wd))
+			if !errors.Is(err, tt.want) {
+				t.Fatalf("got %v, want %v", err, tt.want)
+			}
+			if tt.want != nil {
+				return
+			}
+			for _, kind := range []DocumentKind{Workflow, Task} {
+				if !isDir(s.kindDir(Local, kind)) {
+					t.Errorf("%s not created", s.kindDir(Local, kind))
+				}
+			}
+		})
+	}
+}
+
 func TestPath(t *testing.T) {
 	s := New(filepath.Join("proj", ".awf"))
 	tests := []struct {

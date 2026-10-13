@@ -19,6 +19,7 @@ func TestParse(t *testing.T) {
 		{in: "DIFF.MD", want: Ref{Path: "DIFF.MD"}},
 		{in: "tasks/diff", want: Ref{Path: "tasks/diff"}},
 		{in: "diff@1.2.3", want: Ref{ID: "diff", Version: version.Version{Major: 1, Minor: 2, Patch: 3}}},
+		{in: "github.com/maya/flows#diff@1.2.3", want: Ref{ID: "github.com/maya/flows#diff", Version: version.Version{Major: 1, Minor: 2, Patch: 3}}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.in, func(t *testing.T) {
@@ -42,6 +43,7 @@ func TestParseErrors(t *testing.T) {
 		{in: "diff", want: ErrUnpinned},
 		{in: "Diff@1.2.3", want: store.ErrNotAnID},
 		{in: "diff@1", want: version.ErrNotAVersion},
+		{in: "Maya/flows#diff@1.2.3", want: store.ErrNotANamespace},
 	}
 	for _, tt := range tests {
 		t.Run(tt.in, func(t *testing.T) {

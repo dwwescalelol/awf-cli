@@ -147,8 +147,8 @@ func TestPath(t *testing.T) {
 		id   ID
 		want string
 	}{
-		{Workflow, "feat-dev", filepath.Join("proj", ".awf", "_", "workflow", "feat-dev", "0.1.0.yaml")},
-		{Task, "feat-dev", filepath.Join("proj", ".awf", "_", "task", "feat-dev", "0.1.0.md")},
+		{Workflow, "feat-dev", filepath.Join("proj", ".awf", Local, "workflow", "feat-dev", "0.1.0.yaml")},
+		{Task, "feat-dev", filepath.Join("proj", ".awf", Local, "task", "feat-dev", "0.1.0.md")},
 		{Workflow, "github.com/maya/flows#feat-dev", filepath.Join("proj", ".awf", "github.com", "maya", "flows", "workflow", "feat-dev", "0.1.0.yaml")},
 	}
 	for _, tt := range tests {
@@ -184,10 +184,10 @@ func TestCreateAndList(t *testing.T) {
 	write(Task, "create-diff", "0.1.0")
 
 	// Empty ids and files of the wrong kind are not versions.
-	if err := os.MkdirAll(filepath.Join(s.Dir(), "_", "workflow", "drafted"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(s.Dir(), Local, "workflow", "drafted"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(s.Dir(), "_", "workflow", "ship", "notes.md"), nil, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(s.Dir(), Local, "workflow", "ship", "notes.md"), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -204,7 +204,7 @@ func TestCreateAndList(t *testing.T) {
 	}
 
 	wantSkipped := []Skipped{{
-		Path:   filepath.Join(s.Dir(), "_", "workflow", "ship", "notes.md"),
+		Path:   filepath.Join(s.Dir(), Local, "workflow", "ship", "notes.md"),
 		Reason: ErrNotADocument,
 	}}
 	sameSkip := func(a, b Skipped) bool { return a.Path == b.Path && errors.Is(a.Reason, b.Reason) }

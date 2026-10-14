@@ -3,7 +3,7 @@ name: feat-dev-small
 summary: Take an approved plan and run it to a reviewed diff in an isolated worktree, then tear down.
 model: claude-sonnet-5
 version: 0.4.0
-sha: null
+sha: sha256-0f9947f3fded614be67a06b4e177df541ba829ba614c17ddf4bf3ae56bbcdb03
 start: worktree-setup
 orchestration:
   agentic-review:

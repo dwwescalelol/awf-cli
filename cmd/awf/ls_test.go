@@ -8,13 +8,13 @@ import (
 
 func TestList(t *testing.T) {
 	project(t)
-	for _, c := range []struct {
-		kind store.DocumentKind
-		id   string
-	}{{store.Workflow, "feat-dev"}, {store.Workflow, "feat-dev"}, {store.Task, "create-diff"}} {
-		if _, err := create(c.kind, c.id, false); err != nil {
-			t.Fatal(err)
-		}
+	sealed(t, store.Workflow, "feat-dev", "0.1.0")
+	sealed(t, store.Workflow, "feat-dev", "0.2.0")
+	if _, err := create(store.Workflow, "feat-dev", false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := create(store.Task, "create-diff", false); err != nil {
+		t.Fatal(err)
 	}
 
 	tests := []struct {
@@ -47,11 +47,11 @@ func TestList(t *testing.T) {
 		t.Fatal(err)
 	}
 	wf := c.listings[store.Workflow].documents
-	if len(wf) != 1 || wf[0].ID != "feat-dev" || len(wf[0].Versions) != 2 {
+	if len(wf) != 1 || wf[0].ID != "feat-dev" || len(wf[0].Versions) != 2 || !wf[0].Draft {
 		t.Errorf("workflows: got %+v", wf)
 	}
 	tasks := c.listings[store.Task].documents
-	if len(tasks) != 1 || tasks[0].ID != "create-diff" {
+	if len(tasks) != 1 || tasks[0].ID != "create-diff" || len(tasks[0].Versions) != 0 || !tasks[0].Draft {
 		t.Errorf("tasks: got %+v", tasks)
 	}
 }

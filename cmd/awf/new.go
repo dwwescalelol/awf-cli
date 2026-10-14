@@ -1,11 +1,12 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/dwwescalelol/awf-cli/internal/scaffold"
 	"github.com/dwwescalelol/awf-cli/internal/store"
-	"github.com/dwwescalelol/awf-cli/internal/version"
 	"github.com/spf13/cobra"
 )
 
@@ -16,17 +17,19 @@ func newCmd() *cobra.Command {
 	}, newKindCmd(store.Workflow), newKindCmd(store.Task))
 }
 
-const newLong = `Create a document, or a new version of one.
+const newLong = `Create the draft of a document in the local namespace.
 
-The version defaults to the next minor. A new version of an existing id copies
-its latest version.`
+A draft has no version and no sha. A new draft of an existing id copies its
+latest version. Seal gives the draft its version.`
+
+var errNewPinned = errors.New("a draft has no version, seal sets it")
 
 func newKindCmd(kind store.DocumentKind) *cobra.Command {
 	return &cobra.Command{
-		Use:   kind.String() + " [<namespace>#]<id>[@<version>]",
-		Short: "Create a " + kind.String() + ", or a new version of one",
+		Use:   kind.String() + " <id>",
+		Short: "Create the draft of a " + kind.String(),
 		Long:  newLong,
-		Args:  targetArgs(kind),
+		Args:  cobra.ExactArgs(1),
 		RunE:  runNew(kind),
 	}
 }
@@ -45,28 +48,33 @@ func runNew(kind store.DocumentKind) func(*cobra.Command, []string) error {
 }
 
 type draft struct {
-	kind    store.DocumentKind
-	id      store.ID
-	version version.Version
-	path    string
+	kind store.DocumentKind
+	id   store.ID
+	path string
 }
 
 func formatCreated(d draft) string {
-	return fmt.Sprintf("created %s %s@%s\n%s", d.kind, d.id, d.version, d.path)
+	return fmt.Sprintf("created %s %s draft\n%s", d.kind, d.id, d.path)
 }
 
 func create(kind store.DocumentKind, arg string, global bool) (draft, error) {
-	id, want, pinned, err := parseTarget(arg)
+	name, _, pinned := strings.Cut(arg, "@")
+	id, err := store.NewID(name)
 	if err != nil {
 		return draft{}, err
+	}
+	if err := id.CheckLocal(); err != nil {
+		return draft{}, err
+	}
+	if pinned {
+		return draft{}, fmt.Errorf("%q: %w", arg, errNewPinned)
 	}
 	s, err := store.Resolve(global)
 	if err != nil {
 		return draft{}, err
 	}
-	v, err := scaffold.Create(s, kind, id, want, pinned)
-	if err != nil {
+	if err := scaffold.Create(s, kind, id); err != nil {
 		return draft{}, err
 	}
-	return draft{kind: kind, id: id, version: v, path: s.Path(kind, id, v)}, nil
+	return draft{kind: kind, id: id, path: s.DraftPath(kind, id)}, nil
 }

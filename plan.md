@@ -37,7 +37,7 @@ A task file is a fragment, not a document. The spec's "YAML or JSON" line covers
 | `seal` | bundle → validate → hash → write. The sealed file is self-contained |
 | `bundle` | inline external `$ref`s into `tasks` |
 | `extract` | split `tasks` to `.md` files, replace with `$ref`s |
-| `new` | create a workflow or task in scope, unsealed — a new id, or a new version of one |
+| `new` | create the draft of a workflow or task in `_`: unversioned and unsealed |
 | `install` | fetch a document from a git remote by `<id>@<version>` |
 | `publish` | commit, tag and push a sealed document to a git remote |
 | `propose` | push a change to a review branch and open it for review |
@@ -101,10 +101,13 @@ Not dereference: nothing is inlined at the use site.
 ## new
 
 ```
-awf new workflow feat-dev          # id is free    → 0.1.0, blank skeleton
-awf new workflow feat-dev 0.4.0    # id exists     → copy 0.3.0, sha nulled
+awf new workflow feat-dev          # id is free    → draft.yaml, blank skeleton
+awf new workflow feat-dev          # id exists     → draft.yaml, copy of the latest version, sha nulled
 awf new task create-diff
+awf seal workflow feat-dev         # draft.yaml    → <version>.yaml, the version written in the draft
 ```
+
+A draft is `<id>/draft.<ext>`: unsealed, one per id, in `_` only. `new` writes it without a version. `seal` moves it to `<version>.<ext>`, using the version written in the draft, which must be newer than the latest. A document without a version cannot be sealed.
 
 One verb. Whether the id already exists decides which case it is, so the user never picks. No `add` — everywhere else `add` means putting an existing thing into a set (`cargo add`, `helm repo add`), never creating one.
 

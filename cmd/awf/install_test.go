@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/dwwescalelol/awf-cli/internal/remote"
+	"github.com/dwwescalelol/awf-cli/internal/scaffold"
 	"github.com/dwwescalelol/awf-cli/internal/store"
 )
 
@@ -20,16 +21,14 @@ func publish(t *testing.T, repo, dir, task string) {
 		t.Fatal(err)
 	}
 	t.Chdir(dir)
-	for range 2 {
-		d, err := create(store.Workflow, "review", false)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, _, err := sealDocument(request{kind: store.Workflow, args: []string{"review@" + d.version.String()}}, false); err != nil {
-			t.Fatal(err)
-		}
+	for _, as := range []string{"0.1.0", "0.2.0"} {
+		sealed(t, store.Workflow, "review", as)
 	}
-	if _, err := create(store.Task, task, false); err != nil {
+	data, err := scaffold.Blank(store.Task, store.ID(task), scaffold.FirstVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.New(".awf").Write(store.Task, store.ID(task), scaffold.FirstVersion, data); err != nil {
 		t.Fatal(err)
 	}
 	run := func(args ...string) {

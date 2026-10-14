@@ -8,14 +8,101 @@ import (
 	"testing"
 
 	"github.com/dwwescalelol/awf-cli/internal/load"
-	"github.com/dwwescalelol/awf-cli/internal/manifest"
 	"github.com/dwwescalelol/awf-cli/internal/seal"
 	"github.com/dwwescalelol/awf-cli/internal/store"
 )
 
+func sealed(t *testing.T, kind store.DocumentKind, id, v string) string {
+	t.Helper()
+	d, err := create(kind, id, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stamp(t, d.path, v)
+	path, _, err := sealDocument(request{kind: kind, args: []string{id}}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func stamp(t *testing.T, path, v string) {
+	t.Helper()
+	rewrite(t, path, "openawf: 0.1.0\n", "openawf: 0.1.0\nversion: "+v+"\n")
+}
+
 func TestSealWorkflow(t *testing.T) {
-	project(t)
-	task, err := create(store.Task, "build", false)
+	root := project(t)
+	sealed(t, store.Task, "build", "0.1.0")
+	check := filepath.Join(root, "check.md")
+	if err := os.WriteFile(check, []byte("---\nopenawf: 0.1.0\nversion: 0.1.0\nsha: null\n---\n\n# check\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	wf, err := create(store.Workflow, "deploy", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rewrite(t, wf.path, "start: start", "start: build")
+	rewrite(t, wf.path, "  start: null", "  build: check\n  check: null")
+	data, err := os.ReadFile(wf.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	head, _, _ := strings.Cut(string(data), "tasks:")
+	if err := os.WriteFile(wf.path, []byte(head+"tasks:\n  build:\n    $ref: build@0.1.0\n  check:\n    $ref: "+check+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stamp(t, wf.path, "0.1.0")
+
+	if _, _, err := sealDocument(request{kind: store.Workflow, args: []string{"deploy"}}, false); !errors.Is(err, ErrUnsealedTasks) || !strings.Contains(err.Error(), "check") {
+		t.Fatalf("seal over an unsealed task: got %v, want %v naming check", err, ErrUnsealedTasks)
+	}
+	path, sha, err := sealDocument(request{kind: store.Workflow, args: []string{"deploy"}}, true)
+	if err != nil {
+		t.Fatalf("seal --recursive: %v", err)
+	}
+	if f, err := load.ReadTask(check, nil); err != nil || f.Doc.SHA == nil {
+		t.Fatalf("task after seal --recursive: got %+v, %v, want a sha", f, err)
+	}
+	if filepath.Base(path) != "0.1.0.yaml" || !strings.HasPrefix(sha, "sha256-") {
+		t.Errorf("got %s %s", path, sha)
+	}
+	if _, err := os.Stat(wf.path); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("draft after seal: got %v, want it gone", err)
+	}
+	doc := readWorkflow(t, path)
+	if doc.SHA == nil || *doc.SHA != sha || doc.Version.String() != "0.1.0" || doc.Tasks["build"].Task == nil || doc.Tasks["build"].Task.Source != "build@0.1.0" || doc.Tasks["build"].Task.SHA == nil {
+		t.Errorf("sealed: %+v", doc)
+	}
+	if _, _, err := validate(request{kind: store.Workflow, args: []string{"deploy"}}); err != nil {
+		t.Fatalf("validate sealed: %v", err)
+	}
+
+	if _, _, err := sealDocument(request{kind: store.Workflow, args: []string{"deploy"}}, false); !errors.Is(err, seal.ErrSealed) {
+		t.Errorf("re-seal: got %v, want %v", err, seal.ErrSealed)
+	}
+
+	rewrite(t, path, "name: deploy\nversion: 0.1.0", "name: deploy\nversion: 0.2.0")
+	if _, _, err := validate(request{kind: store.Workflow, file: path}); err != nil {
+		t.Errorf("version is not hashed: %v", err)
+	}
+	rewrite(t, path, "name: deploy\nversion: 0.2.0", "name: deploy\nversion: 0.1.0")
+
+	rewrite(t, path, "name: deploy", "name: deploy\nsummary: edited")
+	if _, _, err := validate(request{kind: store.Workflow, args: []string{"deploy"}}); !errors.Is(err, seal.ErrMismatch) {
+		t.Errorf("edited: got %v, want %v", err, seal.ErrMismatch)
+	}
+	if _, err := bundle(request{kind: store.Workflow, args: []string{"deploy"}}, ""); !errors.Is(err, seal.ErrMismatch) {
+		t.Errorf("bundle edited: got %v, want %v", err, seal.ErrMismatch)
+	}
+	if _, _, err := sealDocument(request{kind: store.Workflow, args: []string{"deploy"}}, false); !errors.Is(err, seal.ErrSealed) {
+		t.Errorf("re-seal edited: got %v, want %v", err, seal.ErrSealed)
+	}
+}
+
+func TestSealStoreFile(t *testing.T) {
+	root := project(t)
+	d, err := create(store.Task, "build", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,71 +117,70 @@ func TestSealWorkflow(t *testing.T) {
 		t.Fatal(err)
 	}
 	head, _, _ := strings.Cut(string(data), "tasks:")
-	if err := os.WriteFile(wf.path, []byte(head+"tasks:\n  build:\n    $ref: build@0.1.0\n"), 0o644); err != nil {
+	if err := os.WriteFile(wf.path, []byte(head+"tasks:\n  build:\n    $ref: "+d.path+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	stamp(t, wf.path, "0.1.0")
+	if _, _, err := sealDocument(request{kind: store.Workflow, args: []string{"deploy"}}, true); !errors.Is(err, errDraftRef) {
+		t.Errorf("--recursive over a draft: got %v, want %v", err, errDraftRef)
+	}
 
-	if _, _, err := sealDocument(request{kind: store.Workflow, args: []string{"deploy"}}, false); !errors.Is(err, ErrUnsealedTasks) || !strings.Contains(err.Error(), "build") {
-		t.Fatalf("seal over an unsealed task: got %v, want %v naming build", err, ErrUnsealedTasks)
+	if _, _, err := sealDocument(request{kind: store.Task, file: d.path}, false); !errors.Is(err, errNoVersion) {
+		t.Errorf("-f on a draft without a version: got %v, want %v", err, errNoVersion)
 	}
-	path, sha, err := sealDocument(request{kind: store.Workflow, args: []string{"deploy"}}, true)
-	if err != nil {
-		t.Fatalf("seal --recursive: %v", err)
+	stamp(t, d.path, "0.1.0")
+	path, _, err := sealDocument(request{kind: store.Task, file: d.path}, false)
+	if err != nil || filepath.Base(path) != "0.1.0.md" {
+		t.Fatalf("-f on a draft: got %s, %v, want 0.1.0.md", path, err)
 	}
-	if f, err := load.ReadTask(task.path, nil); err != nil || f.Doc.SHA == nil {
-		t.Fatalf("task after seal --recursive: got %+v, %v, want a sha", f, err)
+	if _, err := os.Stat(d.path); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("draft after -f seal: got %v, want it gone", err)
 	}
-	if path != wf.path || !strings.HasPrefix(sha, "sha256-") {
-		t.Errorf("got %s %s", path, sha)
+
+	foreign := filepath.Join(root, ".awf", "example.com", "zaz", "flows", store.Task.Dir(), "lint", "0.1.0.md")
+	if err := os.MkdirAll(filepath.Dir(foreign), 0o755); err != nil {
+		t.Fatal(err)
 	}
-	sealed, err := os.ReadFile(wf.path)
+	if err := os.WriteFile(foreign, []byte("---\nopenawf: 0.1.0\nversion: 0.1.0\nsha: null\n---\n\n# lint\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := sealDocument(request{kind: store.Task, file: foreign}, false); !errors.Is(err, store.ErrForeign) {
+		t.Errorf("-f on a foreign file: got %v, want %v", err, store.ErrForeign)
+	}
+}
+
+func TestSealVersion(t *testing.T) {
+	project(t)
+	sealed(t, store.Task, "build", "0.1.0")
+	d, err := create(store.Task, "build", false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	doc, err := manifest.Unmarshal(sealed)
-	if err != nil {
-		t.Fatal(err)
+	seal := func() (string, error) {
+		path, _, err := sealDocument(request{kind: store.Task, args: []string{"build"}}, false)
+		return path, err
 	}
-	if doc.SHA == nil || *doc.SHA != sha || doc.Tasks["build"].Task == nil || doc.Tasks["build"].Task.Source != "build@0.1.0" || doc.Tasks["build"].Task.SHA == nil {
-		t.Errorf("sealed:\n%s", sealed)
+	if _, err := seal(); !errors.Is(err, errNoVersion) {
+		t.Errorf("no version: got %v, want %v", err, errNoVersion)
 	}
-	if _, _, err := validate(request{kind: store.Workflow, args: []string{"deploy"}}); err != nil {
-		t.Fatalf("validate sealed: %v", err)
+	for _, v := range []string{"0.1.0", "0.0.9"} {
+		stamp(t, d.path, v)
+		if _, err := seal(); !errors.Is(err, errNotNewer) {
+			t.Errorf("%s: got %v, want %v", v, err, errNotNewer)
+		}
+		rewrite(t, d.path, "version: "+v+"\n", "")
 	}
-
-	if _, _, err := sealDocument(request{kind: store.Workflow, args: []string{"deploy"}}, false); !errors.Is(err, seal.ErrSealed) {
-		t.Errorf("re-seal: got %v, want %v", err, seal.ErrSealed)
-	}
-
-	rewrite(t, wf.path, "name: deploy\nversion: 0.1.0", "name: deploy\nversion: 0.2.0")
-	if _, _, err := validate(request{kind: store.Workflow, file: wf.path}); err != nil {
-		t.Errorf("version is not hashed: %v", err)
-	}
-	rewrite(t, wf.path, "name: deploy\nversion: 0.2.0", "name: deploy\nversion: 0.1.0")
-
-	rewrite(t, wf.path, "name: deploy", "name: deploy\nsummary: edited")
-	if _, _, err := validate(request{kind: store.Workflow, args: []string{"deploy"}}); !errors.Is(err, seal.ErrMismatch) {
-		t.Errorf("edited: got %v, want %v", err, seal.ErrMismatch)
-	}
-	if _, err := bundle(request{kind: store.Workflow, args: []string{"deploy"}}, ""); !errors.Is(err, seal.ErrMismatch) {
-		t.Errorf("bundle edited: got %v, want %v", err, seal.ErrMismatch)
-	}
-	if _, _, err := sealDocument(request{kind: store.Workflow, args: []string{"deploy"}}, false); !errors.Is(err, seal.ErrSealed) {
-		t.Errorf("re-seal edited: got %v, want %v", err, seal.ErrSealed)
+	stamp(t, d.path, "1.0.0")
+	if path, err := seal(); err != nil || filepath.Base(path) != "1.0.0.md" {
+		t.Errorf("1.0.0: got %s, %v", path, err)
 	}
 }
 
 func TestSealTask(t *testing.T) {
 	project(t)
-	task, err := create(store.Task, "build", false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, _, err := sealDocument(request{kind: store.Task, args: []string{"build"}}, false); err != nil {
-		t.Fatalf("seal: %v", err)
-	}
-	f, err := load.ReadTask(task.path, nil)
-	if err != nil || f.Doc.SHA == nil || f.Doc.OpenAWF.String() != "0.1.0" {
+	path := sealed(t, store.Task, "build", "0.1.0")
+	f, err := load.ReadTask(path, nil)
+	if err != nil || f.Doc.SHA == nil || f.Doc.OpenAWF.String() != "0.1.0" || f.Doc.Version.String() != "0.1.0" {
 		t.Fatalf("sealed task: got %+v, %v", f, err)
 	}
 	if _, _, err := validate(request{kind: store.Task, args: []string{"build"}}); err != nil {
@@ -104,11 +190,11 @@ func TestSealTask(t *testing.T) {
 		t.Errorf("re-seal: got %v, want %v", err, seal.ErrSealed)
 	}
 
-	data, err := os.ReadFile(task.path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(task.path, append(data, "more\n"...), 0o644); err != nil {
+	if err := os.WriteFile(path, append(data, "more\n"...), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := validate(request{kind: store.Task, args: []string{"build"}}); !errors.Is(err, seal.ErrMismatch) {
@@ -129,6 +215,7 @@ func TestSealTask(t *testing.T) {
 	if err := os.WriteFile(wf.path, []byte(head+"tasks:\n  build:\n    $ref: build@0.1.0\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	stamp(t, wf.path, "0.1.0")
 	if _, _, err := sealDocument(request{kind: store.Workflow, args: []string{"deploy"}}, false); !errors.Is(err, seal.ErrMismatch) {
 		t.Errorf("seal over an edited task: got %v, want %v", err, seal.ErrMismatch)
 	}
@@ -137,7 +224,7 @@ func TestSealTask(t *testing.T) {
 func TestSealFile(t *testing.T) {
 	root := project(t)
 	path := filepath.Join(root, "wf.yaml")
-	doc := "openawf: 0.1.0\nname: wf\nsha: null\nstart: a\norchestration:\n  a: null\ntasks:\n  a:\n    body: a\n"
+	doc := "openawf: 0.1.0\nname: wf\nversion: 0.1.0\nsha: null\nstart: a\norchestration:\n  a: null\ntasks:\n  a:\n    body: a\n"
 	if err := os.WriteFile(path, []byte(doc), 0o644); err != nil {
 		t.Fatal(err)
 	}

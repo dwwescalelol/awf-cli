@@ -133,3 +133,12 @@ func TestBundleRejectsTask(t *testing.T) {
 		t.Errorf("got %v, want %v", err, errWrongKind)
 	}
 }
+
+func TestBundleReadOnly(t *testing.T) {
+	root := project(t)
+	installed(t, root, store.Workflow, "deploy", "openawf: 0.1.0\nname: deploy\nversion: 0.1.0\nsha: null\nstart: a\norchestration:\n  a: null\ntasks:\n  a:\n    body: a\n")
+
+	if _, err := bundle(request{kind: store.Workflow, args: []string{"acme#deploy"}}, ""); !errors.Is(err, store.ErrReadOnly) {
+		t.Errorf("got %v, want %v", err, store.ErrReadOnly)
+	}
+}

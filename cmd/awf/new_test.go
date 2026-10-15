@@ -151,6 +151,9 @@ func TestCreateRejects(t *testing.T) {
 	if _, err := create(store.Workflow, "feat-dev@one", false); err == nil {
 		t.Error("bad version: got no error")
 	}
+	if _, err := create(store.Workflow, "acme#feat-dev", false); !errors.Is(err, store.ErrReadOnly) {
+		t.Errorf("foreign id: got %v, want %v", err, store.ErrReadOnly)
+	}
 }
 
 func TestCreateGlobal(t *testing.T) {

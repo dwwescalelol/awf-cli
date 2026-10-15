@@ -19,11 +19,11 @@ func newCmd() *cobra.Command {
 const newLong = `Create a document, or a new version of one.
 
 The version defaults to the next minor. A new version of an existing id copies
-its latest version.`
+its latest version. ` + readOnlyNote
 
 func newKindCmd(kind store.DocumentKind) *cobra.Command {
 	return &cobra.Command{
-		Use:   kind.String() + " [<namespace>#]<id>[@<version>]",
+		Use:   kind.String() + " <id>[@<version>]",
 		Short: "Create a " + kind.String() + ", or a new version of one",
 		Long:  newLong,
 		Args:  targetArgs(kind),
@@ -58,6 +58,9 @@ func formatCreated(d draft) string {
 func create(kind store.DocumentKind, arg string, global bool) (draft, error) {
 	id, want, pinned, err := parseTarget(arg)
 	if err != nil {
+		return draft{}, err
+	}
+	if err := writable(kind, id); err != nil {
 		return draft{}, err
 	}
 	s, err := store.Resolve(global)

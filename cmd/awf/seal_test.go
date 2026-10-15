@@ -152,3 +152,48 @@ func TestSealFile(t *testing.T) {
 		t.Errorf("edited: got %v, want %v", err, seal.ErrMismatch)
 	}
 }
+
+func installed(t *testing.T, root string, kind store.DocumentKind, name, doc string) {
+	t.Helper()
+	ext := ".yaml"
+	if kind == store.Task {
+		ext = ".md"
+	}
+	dir := filepath.Join(root, ".awf", "acme", kind.Dir(), name)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "0.1.0"+ext), []byte(doc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSealReadOnly(t *testing.T) {
+	root := project(t)
+	installed(t, root, store.Task, "build", "---\nopenawf: 0.1.0\nversion: 0.1.0\n---\n\n# build\n")
+
+	if _, _, err := sealDocument(request{kind: store.Task, args: []string{"acme#build"}}, false); !errors.Is(err, store.ErrReadOnly) {
+		t.Errorf("seal: got %v, want %v", err, store.ErrReadOnly)
+	}
+	if _, _, err := validate(request{kind: store.Task, args: []string{"acme#build"}}); err != nil {
+		t.Errorf("validate: %v", err)
+	}
+
+	wf, err := create(store.Workflow, "deploy", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rewrite(t, wf.path, "start: start", "start: build")
+	rewrite(t, wf.path, "  start: null", "  build: null")
+	data, err := os.ReadFile(wf.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	head, _, _ := strings.Cut(string(data), "tasks:")
+	if err := os.WriteFile(wf.path, []byte(head+"tasks:\n  build:\n    $ref: acme#build@0.1.0\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := sealDocument(request{kind: store.Workflow, args: []string{"deploy"}}, true); !errors.Is(err, store.ErrReadOnly) {
+		t.Errorf("seal --recursive over a foreign task: got %v, want %v", err, store.ErrReadOnly)
+	}
+}

@@ -31,6 +31,7 @@ var (
 	ErrWrongName     = errors.New("name does not match the id it is stored under")
 	ErrWrongVersion  = errors.New("version does not match the version it is stored under")
 	ErrInStore       = errors.New("already inside a project store")
+	ErrReadOnly      = errors.New("read-only namespace")
 )
 
 type DocumentKind struct {

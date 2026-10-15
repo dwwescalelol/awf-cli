@@ -9,6 +9,7 @@ import (
 
 	"github.com/dwwescalelol/awf-cli/internal/load"
 	"github.com/dwwescalelol/awf-cli/internal/manifest"
+	"github.com/dwwescalelol/awf-cli/internal/ref"
 	"github.com/dwwescalelol/awf-cli/internal/seal"
 	"github.com/dwwescalelol/awf-cli/internal/store"
 	"github.com/spf13/cobra"
@@ -19,14 +20,14 @@ func sealCmd() *cobra.Command {
 	workflow.Long = `Write a workflow's sha after dereferencing and validating it.
 
 Seal refuses a workflow whose $ref tasks are unsealed. --recursive seals them
-first. ` + sealedNote
+first. ` + sealedNote + " " + readOnlyNote
 	workflow.Flags().BoolP("recursive", "r", false, "seal the workflow's unsealed $ref tasks first")
 	task := documentCmd(store.Task, "Write a task's sha after validating it", runSeal)
-	task.Long = "Write a task's sha after validating it.\n\n" + sealedNote
+	task.Long = "Write a task's sha after validating it.\n\n" + sealedNote + " " + readOnlyNote
 	return kindCmd(&cobra.Command{
 		Use:   "seal",
 		Short: "Write a document's sha after validating it",
-		Long:  "Write a document's sha after validating it.\n\n" + sealedNote,
+		Long:  "Write a document's sha after validating it.\n\n" + sealedNote + " " + readOnlyNote,
 	}, workflow, task)
 }
 
@@ -43,6 +44,9 @@ func runSeal(cmd *cobra.Command, r request) error {
 }
 
 func sealDocument(r request, recursive bool) (string, string, error) {
+	if err := writableTarget(r); err != nil {
+		return "", "", err
+	}
 	d, err := resolve(r)
 	if err != nil {
 		return "", "", err
@@ -88,6 +92,13 @@ func sealWorkflow(d document, recursive bool) ([]byte, string, error) {
 	if names, paths := unsealed(f); len(names) > 0 {
 		if !recursive {
 			return nil, "", fmt.Errorf("%s: %w %s, seal them first or use seal workflow --recursive", d.path, ErrUnsealedTasks, strings.Join(names, ", "))
+		}
+		for _, name := range names {
+			if r, err := ref.Parse(f.Doc.Tasks[name].Task.Source); err == nil && r.Path == "" {
+				if err := writable(store.Task, r.ID); err != nil {
+					return nil, "", err
+				}
+			}
 		}
 		for _, path := range paths {
 			data, _, err := sealTask(document{kind: store.Task, path: path})

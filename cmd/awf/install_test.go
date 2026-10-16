@@ -25,7 +25,7 @@ func publish(t *testing.T, repo, dir, task string) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, _, err := sealDocument(request{kind: store.Workflow, args: []string{"review@" + d.version.String()}}, false); err != nil {
+		if _, _, err := sealDocument(request{kind: store.Workflow, args: []string{"review@" + d.version.String()}}); err != nil {
 			t.Fatal(err)
 		}
 	}

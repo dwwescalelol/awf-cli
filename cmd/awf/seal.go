@@ -9,7 +9,6 @@ import (
 
 	"github.com/dwwescalelol/awf-cli/internal/load"
 	"github.com/dwwescalelol/awf-cli/internal/manifest"
-	"github.com/dwwescalelol/awf-cli/internal/ref"
 	"github.com/dwwescalelol/awf-cli/internal/seal"
 	"github.com/dwwescalelol/awf-cli/internal/store"
 	"github.com/spf13/cobra"
@@ -19,9 +18,7 @@ func sealCmd() *cobra.Command {
 	workflow := documentCmd(store.Workflow, "Write a workflow's sha after dereferencing and validating it", runSeal)
 	workflow.Long = `Write a workflow's sha after dereferencing and validating it.
 
-Seal refuses a workflow whose $ref tasks are unsealed. --recursive seals them
-first. ` + sealedNote + " " + readOnlyNote
-	workflow.Flags().BoolP("recursive", "r", false, "seal the workflow's unsealed $ref tasks first")
+Seal refuses a workflow whose $ref tasks are unsealed. ` + sealedNote + " " + readOnlyNote
 	task := documentCmd(store.Task, "Write a task's sha after validating it", runSeal)
 	task.Long = "Write a task's sha after validating it.\n\n" + sealedNote + " " + readOnlyNote
 	return kindCmd(&cobra.Command{
@@ -33,9 +30,8 @@ first. ` + sealedNote + " " + readOnlyNote
 
 const sealedNote = "Sealing a document is intended to be permanent. A change requires a new version."
 
-func runSeal(cmd *cobra.Command, r request) error {
-	recursive, _ := cmd.Flags().GetBool("recursive")
-	path, sha, err := sealDocument(r, recursive)
+func runSeal(_ *cobra.Command, r request) error {
+	path, sha, err := sealDocument(r)
 	if err != nil {
 		return err
 	}
@@ -43,7 +39,7 @@ func runSeal(cmd *cobra.Command, r request) error {
 	return nil
 }
 
-func sealDocument(r request, recursive bool) (string, string, error) {
+func sealDocument(r request) (string, string, error) {
 	if err := writableTarget(r); err != nil {
 		return "", "", err
 	}
@@ -56,7 +52,7 @@ func sealDocument(r request, recursive bool) (string, string, error) {
 	if d.kind == store.Task {
 		data, sha, err = sealTask(d)
 	} else {
-		data, sha, err = sealWorkflow(d, recursive)
+		data, sha, err = sealWorkflow(d)
 	}
 	if err != nil {
 		return d.path, "", err
@@ -84,34 +80,13 @@ func sealTask(d document) ([]byte, string, error) {
 	return data, sha, err
 }
 
-func sealWorkflow(d document, recursive bool) ([]byte, string, error) {
+func sealWorkflow(d document) ([]byte, string, error) {
 	f, err := load.ReadWorkflow(d.path, d.scope, d.at)
 	if err := sealable(d.path, f != nil && f.Doc != nil && f.Doc.SHA != nil, err); err != nil {
 		return nil, "", err
 	}
-	if names, paths := unsealed(f); len(names) > 0 {
-		if !recursive {
-			return nil, "", fmt.Errorf("%s: %w %s, seal them first or use seal workflow --recursive", d.path, ErrUnsealedTasks, strings.Join(names, ", "))
-		}
-		for _, name := range names {
-			if r, err := ref.Parse(f.Doc.Tasks[name].Task.Source); err == nil && r.Path == "" {
-				if err := writable(store.Task, r.ID); err != nil {
-					return nil, "", err
-				}
-			}
-		}
-		for _, path := range paths {
-			data, _, err := sealTask(document{kind: store.Task, path: path})
-			if err != nil {
-				return nil, "", err
-			}
-			if err := os.WriteFile(path, data, 0o644); err != nil {
-				return nil, "", err
-			}
-		}
-		if f, err = load.ReadWorkflow(d.path, d.scope, d.at); err != nil {
-			return nil, "", err
-		}
+	if names := unsealed(f); len(names) > 0 {
+		return nil, "", fmt.Errorf("%s: %w %s, seal them first", d.path, ErrUnsealedTasks, strings.Join(names, ", "))
 	}
 	f.Doc.SHA = nil
 	sha, err := seal.Workflow(f.Doc)
@@ -125,21 +100,16 @@ func sealWorkflow(d document, recursive bool) ([]byte, string, error) {
 
 var ErrUnsealedTasks = errors.New("unsealed tasks")
 
-// unsealed names the $ref tasks without a sha, and the files they come from.
-func unsealed(f *load.WorkflowFile) ([]string, []string) {
-	var names, paths []string
-	for name, path := range f.Sources {
-		if f.Doc.Tasks[name].Task.SHA != nil {
-			continue
-		}
-		names = append(names, name)
-		if !slices.Contains(paths, path) {
-			paths = append(paths, path)
+// unsealed names the $ref tasks without a sha.
+func unsealed(f *load.WorkflowFile) []string {
+	var names []string
+	for name := range f.Sources {
+		if f.Doc.Tasks[name].Task.SHA == nil {
+			names = append(names, name)
 		}
 	}
 	slices.Sort(names)
-	slices.Sort(paths)
-	return names, paths
+	return names
 }
 
 func sealable(path string, sealed bool, err error) error {

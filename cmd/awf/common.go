@@ -21,6 +21,8 @@ var (
 
 const kindsAnnotation = "kinds"
 
+const readOnlyNote = "Documents in a namespace other than " + store.Local + " are read-only."
+
 // kindCmd makes cmd take a document kind as its subcommand, one per child.
 func kindCmd(cmd *cobra.Command, children ...*cobra.Command) *cobra.Command {
 	cmd.Args = kindArgs
@@ -137,6 +139,24 @@ func resolve(r request) (document, error) {
 	}
 	d.path = d.at.Path
 	return d, nil
+}
+
+func writable(kind store.DocumentKind, id store.ID) error {
+	if id.Namespace() == store.Local {
+		return nil
+	}
+	return fmt.Errorf("%s %q: %w, only %s is writable", kind, id, store.ErrReadOnly, store.Local)
+}
+
+func writableTarget(r request) error {
+	if r.file != "" {
+		return nil
+	}
+	id, _, _, err := parseTarget(r.args[0])
+	if err != nil {
+		return err
+	}
+	return writable(r.kind, id)
 }
 
 func parseTarget(arg string) (store.ID, version.Version, bool, error) {

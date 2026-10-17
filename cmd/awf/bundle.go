@@ -31,11 +31,14 @@ func bundleCmd() *cobra.Command {
 A $ref is a path to a task file or a stored task pinned as [<namespace>#]<id>@<version>.
 A relative path resolves against the directory holding the store in scope.
 An id resolves in the store in scope. The bundled workflow prints to stdout,
-or to the file given by -o.`,
+or to the file given by -o. ` + readOnlyNote,
 	}, workflow)
 }
 
 func bundle(r request, out string) ([]byte, error) {
+	if err := writableTarget(r); err != nil {
+		return nil, err
+	}
 	d, err := resolve(r)
 	if err != nil {
 		return nil, err

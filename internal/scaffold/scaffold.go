@@ -6,6 +6,7 @@ import (
 
 	"github.com/dwwescalelol/awf-cli/internal/manifest"
 	"github.com/dwwescalelol/awf-cli/internal/schema"
+	"github.com/dwwescalelol/awf-cli/internal/seal"
 	"github.com/dwwescalelol/awf-cli/internal/store"
 	"github.com/dwwescalelol/awf-cli/internal/version"
 )
@@ -48,6 +49,31 @@ func Create(s *store.Store, kind store.DocumentKind, id store.ID, want version.V
 		return version.Version{}, err
 	}
 	return v, nil
+}
+
+// CopyTask writes doc as the task id at version v. A task's sha survives, since
+// the version is not hashed.
+func CopyTask(s *store.Store, id store.ID, v version.Version, doc *manifest.Task) error {
+	doc.Version = v
+	data, err := manifest.MarshalTask(doc)
+	if err != nil {
+		return err
+	}
+	return s.Write(store.Task, id, v, data)
+}
+
+// CopyWorkflow writes doc as the workflow id at version v. The name is hashed,
+// so a renamed workflow loses its sha.
+func CopyWorkflow(s *store.Store, id store.ID, v version.Version, doc *manifest.Workflow) error {
+	doc.Name, doc.Version = id.String(), v
+	if seal.CheckWorkflow(doc) != nil {
+		doc.SHA = nil
+	}
+	data, err := manifest.Marshal(doc)
+	if err != nil {
+		return err
+	}
+	return s.Write(store.Workflow, id, v, data)
 }
 
 func nextVersion(fresh bool, previous version.Version) version.Version {

@@ -36,6 +36,7 @@ Commands that act on a document take its kind, then a target: `awf <command> <ki
 | --- | --- |
 | `awf init` | Create a project store in the working directory. Refuses inside an existing project store. |
 | `awf install (<namespace>#<id>[@<version>] \| <url>)` | Install a sealed document from the git repository at `<namespace>`, or from a document's URL. `-b` picks a branch. |
+| `awf import <kind> <target> [<id>[@<version>]]` | Copy a document from any namespace or file into the `_` namespace, as `<id>[@<version>]` when given. |
 | `awf new <kind> <id>[@<version>]` | Create a document, or a new version of one. |
 | `awf ls [<kind>]` | List the documents in the store. |
 | `awf validate <kind> <target>` | Check a document against the spec. |

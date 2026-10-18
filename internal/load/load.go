@@ -78,7 +78,7 @@ func (f *TaskFile) read(front []byte, body string, at *store.Entry) []error {
 	return nil
 }
 
-var ErrUnsealedVersion = errors.New("a version in a scope needs a sha, an unsealed document is a draft")
+var ErrUnsealedVersion = errors.New("an unsealed document in an awf scope is a draft, name it draft or seal it")
 
 // named checks the file name of a document in a scope, and that a version is sealed.
 func named(path string, unsealed bool) []error {

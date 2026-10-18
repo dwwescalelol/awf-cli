@@ -34,6 +34,7 @@ var (
 	ErrInStore       = errors.New("already inside a project store")
 	ErrReadOnly      = errors.New("read-only namespace")
 	ErrNoDraft       = errors.New("no draft")
+	ErrFileName      = errors.New("a document in a scope is named <major.minor.patch> or " + Draft)
 )
 
 type DocumentKind struct {
@@ -119,6 +120,36 @@ func (id ID) Name() string {
 		return name
 	}
 	return string(id)
+}
+
+// CheckFileName rejects a document in a scope named other than a version or
+// draft. It reports whether path is a version in a scope.
+func CheckFileName(path string) (bool, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return false, nil
+	}
+	dir := filepath.Dir(abs)
+	if real, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = real
+	}
+	root, err := FindDirFrom(dir)
+	if err != nil {
+		return false, nil
+	}
+	rel, err := filepath.Rel(root, dir)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return false, nil
+	}
+	name := filepath.Base(abs)
+	stem := strings.TrimSuffix(name, filepath.Ext(name))
+	if stem == Draft {
+		return false, nil
+	}
+	if _, err := version.Parse(stem); err != nil {
+		return false, fmt.Errorf("%s: %w", name, ErrFileName)
+	}
+	return true, nil
 }
 
 type Document struct {

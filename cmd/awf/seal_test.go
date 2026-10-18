@@ -253,7 +253,14 @@ func installed(t *testing.T, root string, kind store.DocumentKind, name, doc str
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "0.1.0"+ext), []byte(doc), 0o644); err != nil {
+	path := filepath.Join(root, name+ext)
+	if err := os.WriteFile(path, []byte(doc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := sealDocument(request{kind: kind, file: path}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(path, filepath.Join(dir, "0.1.0"+ext)); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -24,10 +24,7 @@ func publish(t *testing.T, repo, dir, task string) {
 	for _, as := range []string{"0.1.0", "0.2.0"} {
 		sealed(t, store.Workflow, "review", as)
 	}
-	data, err := scaffold.Blank(store.Task, store.ID(task), scaffold.FirstVersion)
-	if err != nil {
-		t.Fatal(err)
-	}
+	data := []byte("---\nopenawf: 0.1.0\nversion: 0.1.0\nsha: null\n---\n\n# " + task + "\n")
 	if err := store.New(".awf").Write(store.Task, store.ID(task), scaffold.FirstVersion, data); err != nil {
 		t.Fatal(err)
 	}

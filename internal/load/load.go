@@ -45,7 +45,8 @@ func ParseTask(path string, data []byte, at *store.Entry) (*TaskFile, error) {
 	if err != nil {
 		return f, err
 	}
-	return f, src.report(f.read(front, body, at))
+	errs := f.read(front, body, at)
+	return f, src.report(append(named(path, f.Doc != nil && f.Doc.SHA == nil), errs...))
 }
 
 func (f *TaskFile) read(front []byte, body string, at *store.Entry) []error {
@@ -77,6 +78,20 @@ func (f *TaskFile) read(front []byte, body string, at *store.Entry) []error {
 	return nil
 }
 
+var ErrUnsealedVersion = errors.New("a version in a scope needs a sha, an unsealed document is a draft")
+
+// named checks the file name of a document in a scope, and that a version is sealed.
+func named(path string, unsealed bool) []error {
+	versioned, err := store.CheckFileName(path)
+	switch {
+	case err != nil:
+		return []error{err}
+	case versioned && unsealed:
+		return []error{onValue("sha", ErrUnsealedVersion)}
+	}
+	return nil
+}
+
 func ReadWorkflow(path string, s *store.Store, at *store.Entry) (*WorkflowFile, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -95,6 +110,7 @@ func ParseWorkflow(path string, data []byte, s *store.Store, at *store.Entry, re
 	}
 	f.src = src
 	errs := f.read(path, s, at, read)
+	errs = append(named(path, f.Doc != nil && f.Doc.SHA == nil), errs...)
 	if f.Compiled != nil {
 		f.Warnings = src.warnings(f.Compiled.Warnings())
 	}

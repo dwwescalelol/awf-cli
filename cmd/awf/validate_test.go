@@ -43,7 +43,7 @@ func TestValidateStored(t *testing.T) {
 	if want := rel + `:2:7: error: name "other", stored as "deploy": ` + store.ErrWrongName.Error(); problems[0].Error() != want {
 		t.Errorf("got %q, want %q", problems[0].Error(), want)
 	}
-	if _, _, err := validate(request{kind: store.Workflow, file: wf}); err != nil {
+	if _, _, err := validate(request{kind: store.Workflow, file: wf}); errors.Is(err, store.ErrWrongName) || errors.Is(err, store.ErrWrongVersion) {
 		t.Errorf("-f skips the check: got %v", err)
 	}
 

@@ -6,6 +6,7 @@ import (
 
 	"github.com/dwwescalelol/awf-cli/internal/manifest"
 	"github.com/dwwescalelol/awf-cli/internal/schema"
+	"github.com/dwwescalelol/awf-cli/internal/seal"
 	"github.com/dwwescalelol/awf-cli/internal/store"
 	"github.com/dwwescalelol/awf-cli/internal/version"
 )
@@ -63,15 +64,34 @@ func CopyWorkflow(s *store.Store, id store.ID, doc *manifest.Workflow) error {
 	return s.WriteDraft(store.Workflow, id, data)
 }
 
+// Blank is a new document. A blank with a version is sealed, as a stored version is.
 func Blank(kind store.DocumentKind, id store.ID, v version.Version) ([]byte, error) {
 	if kind == store.Task {
 		t := blankTask(id.String())
 		t.Version = v
+		if err := sealBlank(v, &t.SHA, func() (string, error) { return seal.Task(t) }); err != nil {
+			return nil, err
+		}
 		return manifest.MarshalTask(t)
 	}
 	wf := blankWorkflow(id.String())
 	wf.Version = v
+	if err := sealBlank(v, &wf.SHA, func() (string, error) { return seal.Workflow(wf) }); err != nil {
+		return nil, err
+	}
 	return manifest.Marshal(wf)
+}
+
+func sealBlank(v version.Version, sha **string, hash func() (string, error)) error {
+	if v == (version.Version{}) {
+		return nil
+	}
+	h, err := hash()
+	if err != nil {
+		return err
+	}
+	*sha = &h
+	return nil
 }
 
 func draft[T any](s *store.Store, kind store.DocumentKind, id store.ID, previous version.Version, unmarshal func([]byte) (*T, error), marshal func(*T) ([]byte, error), restamp func(*T)) ([]byte, error) {

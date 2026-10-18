@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"os"
 	"slices"
 	"strings"
 
@@ -16,54 +15,75 @@ import (
 )
 
 func sealCmd() *cobra.Command {
-	workflow := documentCmd(store.Workflow, "Write a workflow's sha after dereferencing and validating it", runSeal)
-	workflow.Long = `Write a workflow's sha after dereferencing and validating it.
+	workflow := sealKindCmd(store.Workflow, "Write a workflow's sha after dereferencing and validating it", `Write a workflow's sha after dereferencing and validating it.
 
-Seal refuses a workflow whose $ref tasks are unsealed. ` + sealedNote + " " + readOnlyNote
-	task := documentCmd(store.Task, "Write a task's sha after validating it", runSeal)
-	task.Long = "Write a task's sha after validating it.\n\n" + sealedNote + " " + readOnlyNote
+Seal refuses a workflow whose $ref tasks are unsealed.
+
+`+sealedNote+" "+readOnlyNote)
+	task := sealKindCmd(store.Task, "Write a task's sha after validating it", "Write a task's sha after validating it.\n\n"+sealedNote+" "+readOnlyNote)
 	return kindCmd(&cobra.Command{
 		Use:   "seal",
-		Short: "Write a document's sha after validating it",
-		Long:  "Write a document's sha after validating it.\n\n" + sealedNote + " " + readOnlyNote,
+		Short: "Write a draft's sha after validating it",
+		Long:  "Write a draft's sha after validating it.\n\n" + sealedNote + " " + readOnlyNote,
 	}, workflow, task)
 }
 
-const sealedNote = `A sealed document has a version. Sealing a draft moves it to its version's file,
-which must be newer than the latest. Sealing is intended to be permanent. A
-change requires a new draft.`
+func sealKindCmd(kind store.DocumentKind, short, long string) *cobra.Command {
+	return &cobra.Command{
+		Use:   kind.String() + " <id>",
+		Short: short,
+		Long:  long,
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			global, _ := cmd.Flags().GetBool("global")
+			path, sha, err := sealDocument(request{kind: kind, args: args, global: global})
+			if err != nil {
+				return err
+			}
+			fmt.Println(path + "\nsealed " + sha)
+			return nil
+		},
+	}
+}
+
+const sealedNote = `Seal acts on the draft of <id>, and moves it to the file of the version
+written in it, which must be newer than the latest. Sealing is intended to be
+permanent. A change requires a new draft.`
 
 var (
-	errNotNewer  = errors.New("not newer than the latest version")
-	errNoVersion = errors.New("no version, a sealed document needs one")
+	errNotNewer    = errors.New("not newer than the latest version")
+	errNoVersion   = errors.New("no version, a sealed document needs one")
+	errDraftPinned = errors.New("acts on a draft, which has no version")
 )
 
-func runSeal(_ *cobra.Command, r request) error {
-	path, sha, err := sealDocument(r)
-	if err != nil {
-		return err
+// draftOf resolves the draft of the id r names in the local namespace.
+func draftOf(r request) (document, error) {
+	arg := r.args[0]
+	if strings.Contains(arg, "@") {
+		return document{}, fmt.Errorf("%q: %w", arg, errDraftPinned)
 	}
-	fmt.Println(path + "\nsealed " + sha)
-	return nil
+	id, err := store.NewID(arg)
+	if err != nil {
+		return document{}, err
+	}
+	if err := writable(r.kind, id); err != nil {
+		return document{}, err
+	}
+	scope, err := store.Resolve(r.global)
+	if err != nil {
+		return document{}, err
+	}
+	path, err := scope.FindDraft(r.kind, id)
+	if err != nil {
+		return document{}, err
+	}
+	return document{kind: r.kind, scope: scope, path: path, at: &store.Entry{Path: path, ID: id, Draft: true}}, nil
 }
 
 func sealDocument(r request) (string, string, error) {
-	if err := writableTarget(r); err != nil {
-		return "", "", err
-	}
-	d, err := resolve(r)
+	d, err := draftOf(r)
 	if err != nil {
 		return "", "", err
-	}
-	if d.at == nil {
-		if d.at, err = d.scope.EntryAt(d.path); err != nil {
-			return d.path, "", err
-		}
-	}
-	if d.at != nil {
-		if err := d.at.ID.CheckLocal(); err != nil {
-			return d.path, "", err
-		}
 	}
 	var data []byte
 	var sha string
@@ -76,19 +96,11 @@ func sealDocument(r request) (string, string, error) {
 	if err != nil {
 		return d.path, "", err
 	}
-	switch {
-	case d.at != nil && d.at.Draft:
-		if err := checkNewer(d, v); err != nil {
-			return d.path, "", err
-		}
-		err = d.scope.Seal(d.kind, d.at.ID, v, data)
-		return d.scope.Path(d.kind, d.at.ID, v), sha, err
-	case d.at != nil:
-		err = d.scope.Replace(d.kind, d.at.ID, d.at.Version, data)
-	default:
-		err = os.WriteFile(d.path, data, 0o644)
+	if err := checkNewer(d, v); err != nil {
+		return d.path, "", err
 	}
-	return d.path, sha, err
+	err = d.scope.Seal(d.kind, d.at.ID, v, data)
+	return d.scope.Path(d.kind, d.at.ID, v), sha, err
 }
 
 func checkNewer(d document, v version.Version) error {

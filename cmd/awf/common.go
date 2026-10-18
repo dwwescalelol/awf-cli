@@ -149,17 +149,6 @@ func writable(kind store.DocumentKind, id store.ID) error {
 	return fmt.Errorf("%s %q: %w, only %s is writable", kind, id, store.ErrReadOnly, store.Local)
 }
 
-func writableTarget(r request) error {
-	if r.file != "" {
-		return nil
-	}
-	id, _, _, err := parseTarget(r.args[0])
-	if err != nil {
-		return err
-	}
-	return writable(r.kind, id)
-}
-
 func parseTarget(arg string) (store.ID, version.Version, bool, error) {
 	name, pin, pinned := strings.Cut(arg, "@")
 	id, err := store.NewID(name)

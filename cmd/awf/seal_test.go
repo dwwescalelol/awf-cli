@@ -57,9 +57,7 @@ func TestSealWorkflow(t *testing.T) {
 	if _, _, err := sealDocument(request{kind: store.Workflow, args: []string{"deploy"}}); !errors.Is(err, ErrUnsealedTasks) || !strings.Contains(err.Error(), "check") {
 		t.Fatalf("seal over an unsealed task: got %v, want %v naming check", err, ErrUnsealedTasks)
 	}
-	if _, _, err := sealDocument(request{kind: store.Task, file: check}); err != nil {
-		t.Fatalf("seal task: %v", err)
-	}
+	sealFile(t, store.Task, check)
 	if f, err := load.ReadTask(check, nil); err != nil || f.Doc.SHA == nil {
 		t.Fatalf("task after seal: got %+v, %v, want a sha", f, err)
 	}
@@ -81,8 +79,8 @@ func TestSealWorkflow(t *testing.T) {
 		t.Fatalf("validate sealed: %v", err)
 	}
 
-	if _, _, err := sealDocument(request{kind: store.Workflow, args: []string{"deploy"}}); !errors.Is(err, seal.ErrSealed) {
-		t.Errorf("re-seal: got %v, want %v", err, seal.ErrSealed)
+	if _, _, err := sealDocument(request{kind: store.Workflow, args: []string{"deploy"}}); !errors.Is(err, store.ErrNoDraft) {
+		t.Errorf("re-seal: got %v, want %v", err, store.ErrNoDraft)
 	}
 
 	rewrite(t, path, "name: deploy\nversion: 0.1.0", "name: deploy\nversion: 0.2.0")
@@ -95,16 +93,13 @@ func TestSealWorkflow(t *testing.T) {
 	if _, _, err := validate(request{kind: store.Workflow, args: []string{"deploy"}}); !errors.Is(err, seal.ErrMismatch) {
 		t.Errorf("edited: got %v, want %v", err, seal.ErrMismatch)
 	}
-	if _, err := bundle(request{kind: store.Workflow, args: []string{"deploy"}}, ""); !errors.Is(err, seal.ErrMismatch) {
-		t.Errorf("bundle edited: got %v, want %v", err, seal.ErrMismatch)
-	}
-	if _, _, err := sealDocument(request{kind: store.Workflow, args: []string{"deploy"}}); !errors.Is(err, seal.ErrSealed) {
-		t.Errorf("re-seal edited: got %v, want %v", err, seal.ErrSealed)
+	if _, _, err := sealDocument(request{kind: store.Workflow, args: []string{"deploy"}}); !errors.Is(err, store.ErrNoDraft) {
+		t.Errorf("re-seal edited: got %v, want %v", err, store.ErrNoDraft)
 	}
 }
 
-func TestSealStoreFile(t *testing.T) {
-	root := project(t)
+func TestSealDraft(t *testing.T) {
+	project(t)
 	d, err := create(store.Task, "build", false)
 	if err != nil {
 		t.Fatal(err)
@@ -128,27 +123,22 @@ func TestSealStoreFile(t *testing.T) {
 		t.Errorf("seal over a draft: got %v, want %v", err, ErrUnsealedTasks)
 	}
 
-	if _, _, err := sealDocument(request{kind: store.Task, file: d.path}); !errors.Is(err, errNoVersion) {
-		t.Errorf("-f on a draft without a version: got %v, want %v", err, errNoVersion)
+	if _, _, err := sealDocument(request{kind: store.Task, args: []string{"build"}}); !errors.Is(err, errNoVersion) {
+		t.Errorf("a draft without a version: got %v, want %v", err, errNoVersion)
 	}
 	stamp(t, d.path, "0.1.0")
-	path, _, err := sealDocument(request{kind: store.Task, file: d.path})
+	if _, _, err := sealDocument(request{kind: store.Task, args: []string{"build@0.1.0"}}); !errors.Is(err, errDraftPinned) {
+		t.Errorf("a pinned id: got %v, want %v", err, errDraftPinned)
+	}
+	path, _, err := sealDocument(request{kind: store.Task, args: []string{"build"}})
 	if err != nil || filepath.Base(path) != "0.1.0.md" {
-		t.Fatalf("-f on a draft: got %s, %v, want 0.1.0.md", path, err)
+		t.Fatalf("a draft: got %s, %v, want 0.1.0.md", path, err)
 	}
 	if _, err := os.Stat(d.path); !errors.Is(err, os.ErrNotExist) {
-		t.Errorf("draft after -f seal: got %v, want it gone", err)
+		t.Errorf("draft after seal: got %v, want it gone", err)
 	}
-
-	foreign := filepath.Join(root, ".awf", "example.com", "zaz", "flows", store.Task.Dir(), "lint", "0.1.0.md")
-	if err := os.MkdirAll(filepath.Dir(foreign), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(foreign, []byte("---\nopenawf: 0.1.0\nversion: 0.1.0\nsha: null\n---\n\n# lint\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if _, _, err := sealDocument(request{kind: store.Task, file: foreign}); !errors.Is(err, store.ErrReadOnly) {
-		t.Errorf("-f on a foreign file: got %v, want %v", err, store.ErrReadOnly)
+	if _, _, err := sealDocument(request{kind: store.Task, args: []string{"build"}}); !errors.Is(err, store.ErrNoDraft) {
+		t.Errorf("no draft: got %v, want %v", err, store.ErrNoDraft)
 	}
 }
 
@@ -189,8 +179,8 @@ func TestSealTask(t *testing.T) {
 	if _, _, err := validate(request{kind: store.Task, args: []string{"build"}}); err != nil {
 		t.Fatalf("validate sealed: %v", err)
 	}
-	if _, _, err := sealDocument(request{kind: store.Task, args: []string{"build"}}); !errors.Is(err, seal.ErrSealed) {
-		t.Errorf("re-seal: got %v, want %v", err, seal.ErrSealed)
+	if _, _, err := sealDocument(request{kind: store.Task, args: []string{"build"}}); !errors.Is(err, store.ErrNoDraft) {
+		t.Errorf("re-seal: got %v, want %v", err, store.ErrNoDraft)
 	}
 
 	data, err := os.ReadFile(path)
@@ -224,22 +214,22 @@ func TestSealTask(t *testing.T) {
 	}
 }
 
-func TestSealFile(t *testing.T) {
-	root := project(t)
-	path := filepath.Join(root, "wf.yaml")
-	doc := "openawf: 0.1.0\nname: wf\nversion: 0.1.0\nsha: null\nstart: a\norchestration:\n  a: null\ntasks:\n  a:\n    body: a\n"
-	if err := os.WriteFile(path, []byte(doc), 0o644); err != nil {
+// sealFile writes the sha into a file outside a scope.
+func sealFile(t *testing.T, kind store.DocumentKind, path string) {
+	t.Helper()
+	d := document{kind: kind, path: path}
+	var data []byte
+	var err error
+	if kind == store.Task {
+		data, _, _, err = sealTask(d)
+	} else {
+		data, _, _, err = sealWorkflow(d)
+	}
+	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := sealDocument(request{kind: store.Workflow, file: path}); err != nil {
-		t.Fatalf("seal: %v", err)
-	}
-	if _, _, err := validate(request{kind: store.Workflow, file: path}); err != nil {
-		t.Errorf("validate: %v", err)
-	}
-	rewrite(t, path, "body: a", "body: b")
-	if _, _, err := validate(request{kind: store.Workflow, file: path}); !errors.Is(err, seal.ErrMismatch) {
-		t.Errorf("edited: got %v, want %v", err, seal.ErrMismatch)
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -257,9 +247,7 @@ func installed(t *testing.T, root string, kind store.DocumentKind, name, doc str
 	if err := os.WriteFile(path, []byte(doc), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := sealDocument(request{kind: kind, file: path}); err != nil {
-		t.Fatal(err)
-	}
+	sealFile(t, kind, path)
 	if err := os.Rename(path, filepath.Join(dir, "0.1.0"+ext)); err != nil {
 		t.Fatal(err)
 	}

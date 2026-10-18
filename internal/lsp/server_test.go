@@ -12,7 +12,6 @@ import (
 
 	"github.com/dwwescalelol/awf-cli/internal/scaffold"
 	"github.com/dwwescalelol/awf-cli/internal/store"
-	"github.com/dwwescalelol/awf-cli/internal/version"
 )
 
 type client struct {
@@ -135,8 +134,15 @@ func setup(t *testing.T) fixture {
 
 func create(t *testing.T, s *store.Store, kind store.DocumentKind, id store.ID) string {
 	t.Helper()
-	v, err := scaffold.Create(s, kind, id, version.Version{}, false)
+	v := scaffold.FirstVersion
+	if latest, err := s.Latest(kind, id); err == nil {
+		v = latest.NextMinor()
+	}
+	data, err := scaffold.Blank(kind, id, v)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Write(kind, id, v, data); err != nil {
 		t.Fatal(err)
 	}
 	return s.Path(kind, id, v)

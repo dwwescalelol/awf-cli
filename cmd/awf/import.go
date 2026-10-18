@@ -22,12 +22,12 @@ func importCmd() *cobra.Command {
 	}, importKindCmd(store.Workflow), importKindCmd(store.Task))
 }
 
-const importLong = `Copy a document into the ` + store.Local + ` namespace, where it is writable.
+const importLong = `Copy a document into the draft of <id> in the ` + store.Local + ` namespace, where it is
+writable.
 
-The source is a document in any namespace, or a file given by -f. The copy
-takes <id> and <version> when given, else the source's own. A workflow's $ref
-tasks are bundled into the copy. The copy keeps its sha only while the sha
-still matches, so a renamed workflow is unsealed.`
+The source is a document in any namespace, or a file given by -f. The draft
+takes <id> when given, else the source's own. A workflow's $ref tasks are
+bundled into the draft. Seal gives the draft its version.`
 
 func importKindCmd(kind store.DocumentKind) *cobra.Command {
 	cmd := documentCmd(kind, "Copy a "+kind.String()+" into the "+store.Local+" namespace", func(_ *cobra.Command, r request) error {
@@ -38,7 +38,7 @@ func importKindCmd(kind store.DocumentKind) *cobra.Command {
 		fmt.Println(formatImported(i))
 		return nil
 	})
-	cmd.Use = kind.String() + " ([<namespace>#]<id>[@<version>] | -f <path>) [<id>[@<version>]]"
+	cmd.Use = kind.String() + " ([<namespace>#]<id>[@<version>] | -f <path>) [<id>]"
 	cmd.Long = importLong
 	cmd.Args = importArgs(kind)
 	return cmd
@@ -52,9 +52,9 @@ func importArgs(kind store.DocumentKind) cobra.PositionalArgs {
 		n := sourceArgs(file)
 		switch {
 		case len(args) > n+1 && file != "":
-			return fmt.Errorf("accepts one <id>[@<version>] with -f, received %d", len(args))
+			return fmt.Errorf("accepts one <id> with -f, received %d", len(args))
 		case len(args) > n+1:
-			return fmt.Errorf("accepts a source %s and one <id>[@<version>], received %d", kind, len(args))
+			return fmt.Errorf("accepts a source %s and one <id>, received %d", kind, len(args))
 		}
 		return source(cmd, args[:min(n, len(args))])
 	}
@@ -70,16 +70,11 @@ func sourceArgs(file string) int {
 
 type imported struct {
 	draft
-	from   string
-	sealed bool
+	from string
 }
 
 func formatImported(i imported) string {
-	state := "unsealed"
-	if i.sealed {
-		state = "sealed"
-	}
-	return fmt.Sprintf("imported %s %s@%s from %s, %s\n%s", i.kind, i.id, i.version, i.from, state, i.path)
+	return fmt.Sprintf("imported %s %s draft from %s\n%s", i.kind, i.id, i.from, i.path)
 }
 
 func importDocument(r request) (imported, error) {
@@ -92,83 +87,78 @@ func importDocument(r request) (imported, error) {
 		return imported{}, err
 	}
 	i := imported{draft: draft{kind: r.kind}, from: d.path}
-	if d.at != nil {
+	switch {
+	case d.at != nil && d.at.Draft:
+		i.from = fmt.Sprintf("%s %s", d.at.ID, store.Draft)
+	case d.at != nil:
 		i.from = fmt.Sprintf("%s@%s", d.at.ID, d.at.Version)
 	}
 
 	if r.kind == store.Task {
-		err = importTask(d, &i, as)
+		err = importTask(d.scope, d, &i, as)
 	} else {
-		err = importWorkflow(d, &i, as)
+		err = importWorkflow(d.scope, d, &i, as)
 	}
 	if err != nil {
 		return imported{}, err
 	}
-	i.path = d.scope.Path(i.kind, i.id, i.version)
+	i.path = d.scope.DraftPath(i.kind, i.id)
 	return i, nil
 }
 
-func importTask(d document, i *imported, as string) error {
+func importTask(s *store.Store, d document, i *imported, as string) error {
 	f, err := load.ReadTask(d.path, d.at)
 	if err != nil {
 		return err
 	}
-	if err := destination(d, i, as, fileName(d.path), f.Doc.Version); err != nil {
+	if err := destination(d, i, as, fileName(d.path)); err != nil {
 		return err
 	}
-	i.sealed = f.Doc.SHA != nil
-	return scaffold.CopyTask(d.scope, i.id, i.version, f.Doc)
+	return scaffold.CopyTask(s, i.id, f.Doc)
 }
 
-func importWorkflow(d document, i *imported, as string) error {
+func importWorkflow(s *store.Store, d document, i *imported, as string) error {
 	f, err := load.ReadWorkflow(d.path, d.scope, d.at)
 	if err != nil {
 		return err
 	}
-	if err := destination(d, i, as, f.Doc.Name, f.Doc.Version); err != nil {
+	if err := destination(d, i, as, f.Doc.Name); err != nil {
 		return err
 	}
-	if err := scaffold.CopyWorkflow(d.scope, i.id, i.version, f.Doc); err != nil {
-		return err
-	}
-	i.sealed = f.Doc.SHA != nil
-	return nil
+	return scaffold.CopyWorkflow(s, i.id, f.Doc)
 }
 
-// destination sets i's id and version from as, falling back to the source's.
-func destination(d document, i *imported, as, name string, v version.Version) error {
+// destination sets i's id from as, falling back to the source's name.
+func destination(d document, i *imported, as, name string) error {
 	if d.at != nil {
 		name = d.at.ID.Name()
-	}
-	if v == (version.Version{}) {
-		v = scaffold.FirstVersion
 	}
 	if as == "" {
 		id, err := store.NewID(name)
 		if err != nil {
 			return fmt.Errorf("%s: %w: %w", d.path, err, errNoName)
 		}
-		i.id, i.version = id, v
+		i.id = id
 		return nil
 	}
-	id, want, pinned, err := parseTarget(as)
+	if strings.Contains(as, "@") {
+		return fmt.Errorf("%q: %w", as, errNewPinned)
+	}
+	id, err := store.NewID(as)
 	if err != nil {
 		return err
 	}
 	if err := writable(i.kind, id); err != nil {
 		return err
 	}
-	if pinned {
-		v = want
-	}
-	i.id, i.version = id, v
+	i.id = id
 	return nil
 }
 
 // fileName is the id a task file names: its directory in a store layout, else its stem.
 func fileName(path string) string {
 	stem := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
-	if _, err := version.Parse(stem); err == nil {
+	if _, err := version.Parse(stem); err == nil || stem == store.Draft {
 		return filepath.Base(filepath.Dir(path))
 	}
 	return stem

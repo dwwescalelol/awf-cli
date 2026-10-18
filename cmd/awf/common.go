@@ -181,6 +181,13 @@ func locate(scope *store.Store, kind store.DocumentKind, arg string) (*store.Ent
 		return nil, err
 	}
 	if !pinned {
+		path, err := scope.FindDraft(kind, id)
+		if err == nil {
+			return &store.Entry{Path: path, ID: id, Draft: true}, nil
+		}
+		if !errors.Is(err, store.ErrNoDraft) {
+			return nil, err
+		}
 		if v, err = scope.Latest(kind, id); err != nil {
 			return nil, err
 		}

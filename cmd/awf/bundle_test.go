@@ -14,9 +14,7 @@ import (
 
 func TestBundle(t *testing.T) {
 	root := project(t)
-	if _, err := create(store.Task, "build", false); err != nil {
-		t.Fatal(err)
-	}
+	sealed(t, store.Task, "build", "0.1.0")
 	wf, err := create(store.Workflow, "deploy", false)
 	if err != nil {
 		t.Fatal(err)
@@ -87,11 +85,7 @@ func TestBundleOut(t *testing.T) {
 
 func TestBundlePinMismatch(t *testing.T) {
 	project(t)
-	task, err := create(store.Task, "build", false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	rewrite(t, task.path, "version: 0.1.0", "version: 9.9.9")
+	rewrite(t, sealed(t, store.Task, "build", "0.1.0"), "version: 0.1.0", "version: 9.9.9")
 	wf, err := create(store.Workflow, "deploy", false)
 	if err != nil {
 		t.Fatal(err)

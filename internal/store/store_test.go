@@ -253,6 +253,70 @@ func TestCreateAndList(t *testing.T) {
 	}
 }
 
+func TestDraft(t *testing.T) {
+	s := New(filepath.Join(t.TempDir(), ".awf"))
+	if _, err := s.FindDraft(Task, "build"); !errors.Is(err, ErrNoDraft) {
+		t.Fatalf("no draft: got %v, want %v", err, ErrNoDraft)
+	}
+	if err := s.WriteDraft(Task, "build", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.WriteDraft(Task, "build", nil); !errors.Is(err, ErrExists) {
+		t.Errorf("second draft: got %v, want %v", err, ErrExists)
+	}
+	want := []Document{{ID: "build", Draft: true}}
+	if got, skipped, err := s.List(Task); err != nil || len(skipped) > 0 || !reflect.DeepEqual(got, want) {
+		t.Errorf("draft only: got %v %v %v, want %v", got, skipped, err, want)
+	}
+
+	v := version.MustParse("0.1.0")
+	if err := s.Seal(Task, "build", v, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.FindDraft(Task, "build"); !errors.Is(err, ErrNoDraft) {
+		t.Errorf("after seal: got %v, want %v", err, ErrNoDraft)
+	}
+	want = []Document{{ID: "build", Versions: []version.Version{v}}}
+	if got, _, err := s.List(Task); err != nil || !reflect.DeepEqual(got, want) {
+		t.Errorf("sealed: got %v %v, want %v", got, err, want)
+	}
+
+	if err := os.MkdirAll(filepath.Join(s.DraftPath(Task, "stuck"), "x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Seal(Task, "stuck", v, nil); err == nil {
+		t.Error("seal over a stuck draft: got no error")
+	}
+	if _, err := s.Find(Task, "stuck", v); !errors.Is(err, ErrNotInstalled) {
+		t.Errorf("version after a failed seal: got %v, want %v", err, ErrNotInstalled)
+	}
+}
+
+func TestEntryAt(t *testing.T) {
+	s := New(filepath.Join(t.TempDir(), ".awf"))
+	tests := []struct {
+		path string
+		want *Entry
+	}{
+		{path: s.DraftPath(Task, "build"), want: &Entry{ID: "build", Draft: true}},
+		{path: s.Path(Workflow, "example.com/zaz#ship", version.MustParse("1.2.3")), want: &Entry{ID: "example.com/zaz#ship", Version: version.MustParse("1.2.3")}},
+		{path: filepath.Join(filepath.Dir(s.Dir()), "wf.yaml")},
+		{path: filepath.Join(s.Dir(), Local, Task.dir, "build", "notes.md")},
+	}
+	for _, tt := range tests {
+		got, err := s.EntryAt(tt.path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if tt.want != nil {
+			tt.want.Path = tt.path
+		}
+		if !reflect.DeepEqual(got, tt.want) {
+			t.Errorf("%s: got %+v, want %+v", tt.path, got, tt.want)
+		}
+	}
+}
+
 func TestNewID(t *testing.T) {
 	bad := []string{"", ".", "..", "a/b", "../etc", "wf/", string(filepath.Separator), "Bad Name", "feat_dev", "-feat", "feat-", "FeatDev"}
 	for _, in := range bad {

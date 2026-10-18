@@ -86,17 +86,22 @@ func (srv *server) home(w http.ResponseWriter, r *http.Request) {
 		render.Message(w, "No workflows in scope", "Create one with awf new workflow <id>, then reload.", srv.store.Dir(), "")
 		return
 	}
-	d := documents[0]
-	http.Redirect(w, r, workflowURL(d.ID, d.Versions[len(d.Versions)-1]), http.StatusFound)
+	http.Redirect(w, r, newestURL(documents[0]), http.StatusFound)
 }
 
 func (srv *server) workflow(w http.ResponseWriter, r *http.Request) {
 	at, err := srv.entry(r)
+	if errors.Is(err, store.ErrNoDraft) {
+		if v, err := srv.store.Latest(store.Workflow, store.ID(r.PathValue("id"))); err == nil {
+			http.Redirect(w, r, workflowURL(store.ID(r.PathValue("id")), v.String()), http.StatusFound)
+			return
+		}
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	live := workflowURL(at.ID, at.Version) + "/events"
+	live := entryURL(at) + "/events"
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 
@@ -134,6 +139,13 @@ func (srv *server) entry(r *http.Request) (*store.Entry, error) {
 	if err != nil {
 		return nil, err
 	}
+	if r.PathValue("version") == store.Draft {
+		path, err := srv.store.FindDraft(store.Workflow, id)
+		if err != nil {
+			return nil, err
+		}
+		return &store.Entry{Path: path, ID: id, Draft: true}, nil
+	}
 	v, err := version.Parse(r.PathValue("version"))
 	if err != nil {
 		return nil, err
@@ -156,8 +168,22 @@ func (srv *server) warn(skipped []store.Skipped) {
 	}
 }
 
-func workflowURL(id store.ID, v version.Version) string {
-	return "/wf/" + url.PathEscape(id.String()) + "/" + v.String()
+func workflowURL(id store.ID, v string) string {
+	return "/wf/" + url.PathEscape(id.String()) + "/" + v
+}
+
+func entryURL(e *store.Entry) string {
+	if e.Draft {
+		return workflowURL(e.ID, store.Draft)
+	}
+	return workflowURL(e.ID, e.Version.String())
+}
+
+func newestURL(d store.Document) string {
+	if d.Draft {
+		return workflowURL(d.ID, store.Draft)
+	}
+	return workflowURL(d.ID, d.Versions[len(d.Versions)-1].String())
 }
 
 func links(s *store.Store, current *store.Entry) (render.Scope, []store.Skipped, error) {
@@ -169,19 +195,35 @@ func links(s *store.Store, current *store.Entry) (render.Scope, []store.Skipped,
 	for _, d := range documents {
 		scope.Workflows = append(scope.Workflows, render.Link{
 			Label:   d.ID.String(),
-			URL:     workflowURL(d.ID, d.Versions[len(d.Versions)-1]),
+			URL:     newestURL(d),
 			Current: d.ID == current.ID,
 			Count:   len(d.Versions),
 		})
 		if d.ID != current.ID {
 			continue
 		}
+		if d.Draft {
+			path, err := s.FindDraft(store.Workflow, d.ID)
+			if err == nil {
+				_, err = status(s, path)
+			}
+			scope.Versions = append(scope.Versions, render.Link{
+				Label:   store.Draft,
+				URL:     workflowURL(d.ID, store.Draft),
+				Current: current.Draft,
+				Invalid: err != nil,
+			})
+		}
 		for i, v := range slices.Backward(d.Versions) {
-			sealed, err := status(s, d.ID, v)
+			path, err := s.Find(store.Workflow, d.ID, v)
+			sealed := false
+			if err == nil {
+				sealed, err = status(s, path)
+			}
 			scope.Versions = append(scope.Versions, render.Link{
 				Label:   v.String(),
-				URL:     workflowURL(d.ID, v),
-				Current: v.Compare(current.Version) == 0,
+				URL:     workflowURL(d.ID, v.String()),
+				Current: !current.Draft && v.Compare(current.Version) == 0,
 				Latest:  i == len(d.Versions)-1,
 				Sealed:  sealed,
 				Invalid: err != nil,
@@ -191,11 +233,7 @@ func links(s *store.Store, current *store.Entry) (render.Scope, []store.Skipped,
 	return scope, skipped, nil
 }
 
-func status(s *store.Store, id store.ID, v version.Version) (bool, error) {
-	path, err := s.Find(store.Workflow, id, v)
-	if err != nil {
-		return false, err
-	}
+func status(s *store.Store, path string) (bool, error) {
 	f, err := load.ReadWorkflow(path, s, nil)
 	if err != nil {
 		return false, err

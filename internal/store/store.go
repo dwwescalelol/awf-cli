@@ -16,6 +16,7 @@ import (
 const (
 	EnvHome  = "AWF_HOME"
 	Local    = "_"
+	Draft    = "draft"
 	dirName  = ".awf"
 	dirPerm  = 0o755
 	filePerm = 0o644
@@ -32,6 +33,7 @@ var (
 	ErrWrongVersion  = errors.New("version does not match the version it is stored under")
 	ErrInStore       = errors.New("already inside a project store")
 	ErrReadOnly      = errors.New("read-only namespace")
+	ErrNoDraft       = errors.New("no draft")
 )
 
 type DocumentKind struct {
@@ -98,6 +100,13 @@ func validNamespace(s string) bool {
 
 func (id ID) String() string { return string(id) }
 
+func (id ID) CheckLocal() error {
+	if id.Namespace() != Local {
+		return fmt.Errorf("%q: %w, only %s is writable", id, ErrReadOnly, Local)
+	}
+	return nil
+}
+
 func (id ID) Namespace() string {
 	if namespace, _, qualified := strings.Cut(string(id), "#"); qualified {
 		return namespace
@@ -115,6 +124,7 @@ func (id ID) Name() string {
 type Document struct {
 	ID       ID
 	Versions []version.Version
+	Draft    bool
 }
 
 type Skipped struct {
@@ -185,6 +195,7 @@ type Entry struct {
 	Path    string
 	ID      ID
 	Version version.Version
+	Draft   bool
 }
 
 func (e *Entry) CheckName(name string) error {
@@ -195,7 +206,7 @@ func (e *Entry) CheckName(name string) error {
 }
 
 func (e *Entry) CheckVersion(v version.Version) error {
-	if e == nil || v.Compare(e.Version) == 0 {
+	if e == nil || e.Draft || v.Compare(e.Version) == 0 {
 		return nil
 	}
 	return fmt.Errorf("version %s, stored as %s: %w", v, e.Version, ErrWrongVersion)
@@ -248,6 +259,22 @@ func (s *Store) Path(kind DocumentKind, id ID, v version.Version) string {
 	return filepath.Join(s.docDir(kind, id), v.String()+kind.ext)
 }
 
+func (s *Store) DraftPath(kind DocumentKind, id ID) string {
+	return filepath.Join(s.docDir(kind, id), Draft+kind.ext)
+}
+
+func (s *Store) FindDraft(kind DocumentKind, id ID) (string, error) {
+	path := s.DraftPath(kind, id)
+	fi, err := os.Stat(path)
+	if err == nil && !fi.IsDir() {
+		return path, nil
+	}
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return "", err
+	}
+	return "", fmt.Errorf("%s %q in %s: %w", kind, id, s.dir, ErrNoDraft)
+}
+
 func (s *Store) Find(kind DocumentKind, id ID, v version.Version) (string, error) {
 	path := s.Path(kind, id, v)
 	fi, err := os.Stat(path)
@@ -280,13 +307,79 @@ func (s *Store) Read(kind DocumentKind, id ID, v version.Version) ([]byte, error
 }
 
 func (s *Store) Write(kind DocumentKind, id ID, v version.Version, data []byte) error {
-	if err := os.MkdirAll(s.docDir(kind, id), dirPerm); err != nil {
-		return err
-	}
-	f, err := os.OpenFile(s.Path(kind, id, v), os.O_WRONLY|os.O_CREATE|os.O_EXCL, filePerm)
+	err := s.create(s.Path(kind, id, v), data)
 	if errors.Is(err, fs.ErrExist) {
 		return fmt.Errorf("%s %q version %s in %s: %w", kind, id, v, s.dir, ErrExists)
 	}
+	return err
+}
+
+func (s *Store) WriteDraft(kind DocumentKind, id ID, data []byte) error {
+	err := s.create(s.DraftPath(kind, id), data)
+	if errors.Is(err, fs.ErrExist) {
+		return fmt.Errorf("%s %q draft in %s: %w", kind, id, s.dir, ErrExists)
+	}
+	return err
+}
+
+func (s *Store) Seal(kind DocumentKind, id ID, v version.Version, data []byte) error {
+	if err := s.Write(kind, id, v, data); err != nil {
+		return err
+	}
+	err := os.Remove(s.DraftPath(kind, id))
+	if err != nil {
+		os.Remove(s.Path(kind, id, v))
+	}
+	return err
+}
+
+func (s *Store) EntryAt(path string) (*Entry, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+	dir := s.dir
+	if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = resolved
+	}
+	if resolved, err := filepath.EvalSymlinks(filepath.Dir(abs)); err == nil {
+		abs = filepath.Join(resolved, filepath.Base(abs))
+	}
+	rel, err := filepath.Rel(dir, abs)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return nil, nil
+	}
+	parts := strings.Split(filepath.ToSlash(rel), "/")
+	if len(parts) < 4 {
+		return nil, nil
+	}
+	file, name, kindDir := parts[len(parts)-1], parts[len(parts)-2], parts[len(parts)-3]
+	namespace := strings.Join(parts[:len(parts)-3], "/")
+	kind, err := KindOf(file)
+	if err != nil || kind.dir != kindDir {
+		return nil, nil
+	}
+	id, err := newIDIn(namespace, name)
+	if err != nil {
+		return nil, nil
+	}
+	e := &Entry{Path: path, ID: id}
+	stem := strings.TrimSuffix(file, filepath.Ext(file))
+	if strings.EqualFold(stem, Draft) {
+		e.Draft = true
+		return e, nil
+	}
+	if e.Version, err = version.Parse(stem); err != nil {
+		return nil, nil
+	}
+	return e, nil
+}
+
+func (s *Store) create(path string, data []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), dirPerm); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, filePerm)
 	if err != nil {
 		return err
 	}
@@ -388,8 +481,10 @@ func (s *Store) listIn(namespace string, kind DocumentKind) ([]Document, []Skipp
 			return nil, nil, err
 		}
 		skipped = append(skipped, versionSkipped...)
-		if len(versions) > 0 {
-			documents = append(documents, Document{ID: id, Versions: versions})
+		_, draftErr := s.FindDraft(kind, id)
+		draft := draftErr == nil
+		if len(versions) > 0 || draft {
+			documents = append(documents, Document{ID: id, Versions: versions, Draft: draft})
 		}
 	}
 	return documents, skipped, nil
@@ -409,7 +504,7 @@ func (s *Store) versions(kind DocumentKind, id ID) ([]version.Version, []Skipped
 	var skipped []Skipped
 	for _, entry := range entries {
 		name := entry.Name()
-		if strings.HasPrefix(name, ".") {
+		if strings.HasPrefix(name, ".") || strings.EqualFold(name, Draft+kind.ext) && !entry.IsDir() {
 			continue
 		}
 		path := filepath.Join(root, name)

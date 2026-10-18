@@ -9,6 +9,7 @@ import (
 	"github.com/dwwescalelol/awf-cli/internal/load"
 	"github.com/dwwescalelol/awf-cli/internal/manifest"
 	"github.com/dwwescalelol/awf-cli/internal/store"
+	"github.com/dwwescalelol/awf-cli/internal/version"
 )
 
 func project(t *testing.T) string {
@@ -25,95 +26,59 @@ func project(t *testing.T) string {
 func TestCreateWorkflow(t *testing.T) {
 	project(t)
 
-	firstDraft, err := create(store.Workflow, "feat-dev", false)
-	first := firstDraft.path
+	d, err := create(store.Workflow, "feat-dev", false)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if filepath.Base(first) != "0.1.0.yaml" {
-		t.Errorf("first: got %s, want 0.1.0.yaml", first)
+	if filepath.Base(d.path) != "draft.yaml" {
+		t.Errorf("got %s, want draft.yaml", d.path)
 	}
-	if _, err := load.ReadWorkflow(first, nil, nil); err != nil {
+	if _, err := load.ReadWorkflow(d.path, nil, nil); err != nil {
 		t.Errorf("blank workflow does not load: %v", err)
 	}
-
-	secondDraft, err := create(store.Workflow, "feat-dev", false)
-	second := secondDraft.path
-	if err != nil {
-		t.Fatalf("create: %v", err)
+	wf := readWorkflow(t, d.path)
+	if wf.Version != (version.Version{}) || wf.SHA != nil {
+		t.Errorf("got version %s sha %v, want none", wf.Version, wf.SHA)
 	}
-	if filepath.Base(second) != "0.2.0.yaml" {
-		t.Errorf("second: got %s, want 0.2.0.yaml", second)
-	}
-	data, err := os.ReadFile(second)
-	if err != nil {
-		t.Fatal(err)
-	}
-	wf, err := manifest.Unmarshal(data)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if wf.Version.String() != "0.2.0" || wf.SHA != nil {
-		t.Errorf("second: got version %s sha %v, want 0.2.0 and null", wf.Version, wf.SHA)
+	if _, err := create(store.Workflow, "feat-dev", false); !errors.Is(err, store.ErrExists) {
+		t.Errorf("second draft: got %v, want %v", err, store.ErrExists)
 	}
 }
 
-func TestCreateCopiesPrevious(t *testing.T) {
+func TestCreateCopiesLatest(t *testing.T) {
 	project(t)
 
-	firstDraft, err := create(store.Workflow, "feat-dev", false)
-	first := firstDraft.path
+	d, err := create(store.Workflow, "feat-dev", false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	data, err := os.ReadFile(first)
-	if err != nil {
-		t.Fatal(err)
-	}
-	wf, err := manifest.Unmarshal(data)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sha := "sha256-abc"
-	wf.Summary, wf.SHA = "Edited.", &sha
-	edited, err := manifest.Marshal(wf)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(first, edited, 0o644); err != nil {
+	rewrite(t, d.path, "name: feat-dev", "name: feat-dev\nsummary: Edited.")
+	stamp(t, d.path, "0.1.0")
+	if _, _, err := sealDocument(request{kind: store.Workflow, args: []string{"feat-dev"}}); err != nil {
 		t.Fatal(err)
 	}
 
-	secondDraft, err := create(store.Workflow, "feat-dev", false)
-	second := secondDraft.path
+	d, err = create(store.Workflow, "feat-dev", false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	data, err = os.ReadFile(second)
-	if err != nil {
-		t.Fatal(err)
-	}
-	copied, err := manifest.Unmarshal(data)
-	if err != nil {
-		t.Fatal(err)
-	}
+	copied := readWorkflow(t, d.path)
 	if copied.Summary != "Edited." {
 		t.Errorf("summary: got %q, want Edited.", copied.Summary)
 	}
-	if copied.SHA != nil {
-		t.Errorf("sha: got %q, want null", *copied.SHA)
+	if copied.Version != (version.Version{}) || copied.SHA != nil {
+		t.Errorf("got version %s sha %v, want none", copied.Version, copied.SHA)
 	}
 }
 
 func TestCreateTask(t *testing.T) {
 	project(t)
 
-	pathDraft, err := create(store.Task, "create-diff", false)
-	path := pathDraft.path
+	d, err := create(store.Task, "create-diff", false)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(d.path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,35 +86,27 @@ func TestCreateTask(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UnmarshalTask: %v", err)
 	}
-	if task.Version.String() != "0.1.0" || task.SHA != nil || task.Body == "" {
-		t.Errorf("got %+v", task)
-	}
-}
-
-func TestCreatePinned(t *testing.T) {
-	project(t)
-
-	pathDraft, err := create(store.Workflow, "feat-dev@0.4.0", false)
-	path := pathDraft.path
-	if err != nil {
-		t.Fatalf("create: %v", err)
-	}
-	if filepath.Base(path) != "0.4.0.yaml" {
-		t.Errorf("got %s, want 0.4.0.yaml", path)
-	}
-	if _, err := create(store.Workflow, "feat-dev@0.4.0", false); !errors.Is(err, store.ErrExists) {
-		t.Errorf("again: got %v, want %v", err, store.ErrExists)
+	if filepath.Base(d.path) != "draft.md" || task.Version != (version.Version{}) || task.SHA != nil || task.Body == "" {
+		t.Errorf("got %s %+v", d.path, task)
 	}
 }
 
 func TestCreateRejects(t *testing.T) {
 	project(t)
 
-	if _, err := create(store.Workflow, "Bad Name", false); !errors.Is(err, store.ErrNotAnID) {
-		t.Errorf("bad id: got %v, want %v", err, store.ErrNotAnID)
+	tests := []struct {
+		arg  string
+		want error
+	}{
+		{arg: "Bad Name", want: store.ErrNotAnID},
+		{arg: "feat-dev@0.4.0", want: errNewPinned},
+		{arg: "example.com/zaz/flows#feat-dev", want: store.ErrReadOnly},
+		{arg: "example.com/zaz/flows#feat-dev@1.0.0", want: store.ErrReadOnly},
 	}
-	if _, err := create(store.Workflow, "feat-dev@one", false); err == nil {
-		t.Error("bad version: got no error")
+	for _, tt := range tests {
+		if _, err := create(store.Workflow, tt.arg, false); !errors.Is(err, tt.want) {
+			t.Errorf("%s: got %v, want %v", tt.arg, err, tt.want)
+		}
 	}
 	if _, err := create(store.Workflow, "acme#feat-dev", false); !errors.Is(err, store.ErrReadOnly) {
 		t.Errorf("foreign id: got %v, want %v", err, store.ErrReadOnly)
@@ -159,22 +116,19 @@ func TestCreateRejects(t *testing.T) {
 func TestCreateGlobal(t *testing.T) {
 	root := project(t)
 
-	pathDraft, err := create(store.Task, "create-diff", true)
-	path := pathDraft.path
+	d, err := create(store.Task, "create-diff", true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := filepath.Join(root, "home", store.Local, store.Task.Dir(), "create-diff", "0.1.0.md")
-	if path != want {
-		t.Errorf("got %s, want %s", path, want)
+	want := filepath.Join(root, "home", store.Local, store.Task.Dir(), "create-diff", "draft.md")
+	if d.path != want {
+		t.Errorf("got %s, want %s", d.path, want)
 	}
 }
 
 func TestCreateUnreadable(t *testing.T) {
 	root := project(t)
-	if _, err := create(store.Task, "create-diff@0.3.0", false); err != nil {
-		t.Fatal(err)
-	}
+	sealed(t, store.Task, "create-diff", "0.1.0")
 	dir := filepath.Join(root, ".awf", store.Local, store.Task.Dir(), "create-diff")
 	if err := os.Chmod(dir, 0o300); err != nil {
 		t.Fatal(err)
@@ -184,7 +138,20 @@ func TestCreateUnreadable(t *testing.T) {
 	if _, err := create(store.Task, "create-diff", false); err == nil {
 		t.Error("got no error, want the read error")
 	}
-	if _, err := os.Stat(filepath.Join(dir, "0.1.0.md")); err == nil {
-		t.Error("0.1.0.md was created over an unreadable id")
+	if _, err := os.Stat(filepath.Join(dir, "draft.md")); err == nil {
+		t.Error("draft.md was created over an unreadable id")
 	}
+}
+
+func readWorkflow(t *testing.T, path string) *manifest.Workflow {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wf, err := manifest.Unmarshal(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return wf
 }

@@ -3,57 +3,68 @@ name: triage-loop
 summary: Classify an incident, fix or escalate it, and report.
 model: claude-sonnet-5
 version: 1.2.0
-sha: null
+sha: sha256-edd82227bd4062e2279ca0a2ab7edab3205634ae5f31bccbb432cd7a137b9ef0
 start: intake
 orchestration:
-  intake:
-    bug: reproduce
-    question: answer
-    noise: report
-  reproduce:
-    ok: fix
-    flaky:
-      task: reproduce
-      retries: 3
+  answer: report
   fix:
-    pass: report
     fail:
       task: reproduce
       session: resume
-  answer: report
-  report: null
+    pass: report
+  intake:
+    bug: reproduce
+    noise: report
+    question: answer
   orphan: report
+  report: null
+  reproduce:
+    flaky:
+      task: reproduce
+      retries: 3
+    ok: fix
 tasks:
+  answer:
+    body: Answer it.
+  fix:
+    output:
+      diff: string
+    model: claude-opus-5-5
+    outcomes:
+      - pass
+      - fail
+    body: Fix it.
   intake:
     summary: Read the incident and decide what kind it is.
-    outcomes: [bug, question, noise]
-    uses: [tracker]
+    outcomes:
+      - bug
+      - question
+      - noise
+    uses:
+      - tracker
     body: |
       # Intake
-
+      
       | kind | meaning |
       |---|---|
       | bug | something broke |
       | question | a user needs help |
-
+      
       <script>alert(1)</script>
-  reproduce:
-    outcomes: [ok, flaky]
-    body: Reproduce it.
-  fix:
-    model: claude-opus-5-5
-    outcomes: [pass, fail]
-    output:
-      diff: string
-    body: Fix it.
-  answer:
-    body: Answer it.
-  report:
-    uses: [tracker]
-    body: Report it.
   orphan:
     body: Never runs.
+  report:
+    uses:
+      - tracker
+    body: Report it.
+  reproduce:
+    outcomes:
+      - ok
+      - flaky
+    body: Reproduce it.
 mcp:
   tracker:
     transport: http
-    tools: [create_issue, comment]
+    tools:
+      - create_issue
+      - comment

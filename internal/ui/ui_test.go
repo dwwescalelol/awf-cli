@@ -17,8 +17,15 @@ import (
 
 func create(t *testing.T, s *store.Store, kind store.DocumentKind, id store.ID) (string, version.Version) {
 	t.Helper()
-	v, err := scaffold.Create(s, kind, id, version.Version{}, false)
+	v := scaffold.FirstVersion
+	if latest, err := s.Latest(kind, id); err == nil {
+		v = latest.NextMinor()
+	}
+	data, err := scaffold.Blank(kind, id, v)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Write(kind, id, v, data); err != nil {
 		t.Fatal(err)
 	}
 	return s.Path(kind, id, v), v
@@ -60,7 +67,7 @@ func TestWorkflow(t *testing.T) {
 	s := store.New(t.TempDir())
 	path, v := create(t, s, store.Workflow, "deploy")
 	h := handler(s)
-	url := workflowURL("deploy", v)
+	url := workflowURL("deploy", v.String())
 
 	rec := get(t, h, "/")
 	if rec.Code != http.StatusFound || rec.Header().Get("Location") != url {
@@ -86,6 +93,37 @@ func TestWorkflow(t *testing.T) {
 	}
 }
 
+func TestDraft(t *testing.T) {
+	s := store.New(t.TempDir())
+	create(t, s, store.Workflow, "deploy")
+	if err := scaffold.Create(s, store.Workflow, "deploy"); err != nil {
+		t.Fatal(err)
+	}
+	h := handler(s)
+	url := workflowURL("deploy", store.Draft)
+
+	rec := get(t, h, "/")
+	if rec.Code != http.StatusFound || rec.Header().Get("Location") != url {
+		t.Fatalf("home: got %d to %q, want a redirect to %q", rec.Code, rec.Header().Get("Location"), url)
+	}
+	rec = get(t, h, url)
+	page := rec.Body.String()
+	if rec.Code != http.StatusOK || !strings.Contains(page, "<h1>deploy</h1>") || !strings.Contains(page, `href="/wf/deploy/0.1.0"`) {
+		t.Errorf("page: got %d, want the draft page linking 0.1.0", rec.Code)
+	}
+
+	path, err := s.FindDraft(store.Workflow, "deploy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if rec := get(t, h, url); rec.Code != http.StatusFound || rec.Header().Get("Location") != "/wf/deploy/0.1.0" {
+		t.Errorf("sealed draft: got %d to %q, want a redirect to 0.1.0", rec.Code, rec.Header().Get("Location"))
+	}
+}
+
 func TestEvents(t *testing.T) {
 	s := store.New(t.TempDir())
 	_, v := create(t, s, store.Workflow, "deploy")
@@ -94,7 +132,7 @@ func TestEvents(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+workflowURL("deploy", v)+"/events", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+workflowURL("deploy", v.String())+"/events", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +182,7 @@ func TestEventsOnRefChange(t *testing.T) {
 	defer srv.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+workflowURL("deploy", v)+"/events", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+workflowURL("deploy", v.String())+"/events", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

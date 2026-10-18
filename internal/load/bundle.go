@@ -31,7 +31,9 @@ func bundle(doc *manifest.Workflow, dir string, s *store.Store, read ReadFunc) (
 			errs = append(errs, unresolved(name, entry.Ref, err)...)
 			continue
 		}
-		t.Source = entry.Ref
+		if t.Source == "" {
+			t.Source = entry.Ref
+		}
 		doc.Tasks[name] = manifest.TaskEntry{Task: t}
 	}
 	return paths, sources, errs

@@ -40,32 +40,8 @@ func importKindCmd(kind store.DocumentKind) *cobra.Command {
 	})
 	cmd.Use = kind.String() + " ([<namespace>#]<id>[@<version>] | -f <path>) [<id>]"
 	cmd.Long = importLong
-	cmd.Args = importArgs(kind)
+	cmd.Args = destArgs(kind, "<id>", false)
 	return cmd
-}
-
-// importArgs takes targetArgs' source, then an optional destination.
-func importArgs(kind store.DocumentKind) cobra.PositionalArgs {
-	source := targetArgs(kind)
-	return func(cmd *cobra.Command, args []string) error {
-		file, _ := cmd.Flags().GetString("file")
-		n := sourceArgs(file)
-		switch {
-		case len(args) > n+1 && file != "":
-			return fmt.Errorf("accepts one <id> with -f, received %d", len(args))
-		case len(args) > n+1:
-			return fmt.Errorf("accepts a source %s and one <id>, received %d", kind, len(args))
-		}
-		return source(cmd, args[:min(n, len(args))])
-	}
-}
-
-// sourceArgs is how many positional arguments name the source: none with -f.
-func sourceArgs(file string) int {
-	if file != "" {
-		return 0
-	}
-	return 1
 }
 
 type imported struct {
@@ -86,13 +62,7 @@ func importDocument(r request) (imported, error) {
 	if err != nil {
 		return imported{}, err
 	}
-	i := imported{draft: draft{kind: r.kind}, from: d.path}
-	switch {
-	case d.at != nil && d.at.Draft:
-		i.from = fmt.Sprintf("%s %s", d.at.ID, store.Draft)
-	case d.at != nil:
-		i.from = fmt.Sprintf("%s@%s", d.at.ID, d.at.Version)
-	}
+	i := imported{draft: draft{kind: r.kind}, from: origin(d)}
 
 	if r.kind == store.Task {
 		err = importTask(d.scope, d, &i, as)
@@ -128,7 +98,6 @@ func importWorkflow(s *store.Store, d document, i *imported, as string) error {
 	return scaffold.CopyWorkflow(s, i.id, f.Doc)
 }
 
-// destination sets i's id from as, falling back to the source's name.
 func destination(d document, i *imported, as, name string) error {
 	if d.at != nil {
 		name = d.at.ID.Name()
@@ -155,11 +124,10 @@ func destination(d document, i *imported, as, name string) error {
 	return nil
 }
 
-// fileName is the id a task file names: its directory in a store layout, else its stem.
 func fileName(path string) string {
-	stem := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
-	if _, err := version.Parse(stem); err == nil || stem == store.Draft {
+	name := store.Stem(path)
+	if _, err := version.Parse(name); err == nil || store.IsDraft(path) {
 		return filepath.Base(filepath.Dir(path))
 	}
-	return stem
+	return name
 }

@@ -122,32 +122,65 @@ func (id ID) Name() string {
 	return string(id)
 }
 
-// CheckFileName rejects a document in a scope named other than a version or
-// draft. It reports whether path is a version in a scope.
-func CheckFileName(path string) (bool, error) {
+func InScope(path string) bool {
 	abs, err := filepath.Abs(path)
 	if err != nil {
-		return false, nil
+		return false
 	}
-	dir := filepath.Dir(abs)
-	if real, err := filepath.EvalSymlinks(dir); err == nil {
-		dir = real
-	}
-	root, err := FindDirFrom(dir)
+	dir := resolved(filepath.Dir(abs))
+	nearest, err := FindDirFrom(dir)
 	if err != nil {
-		return false, nil
+		return false
 	}
+	nearest = resolved(nearest)
+	if within(nearest, dir) {
+		return true
+	}
+	global, err := GlobalDir()
+	if err != nil {
+		return false
+	}
+	global = resolved(global)
+	return within(global, dir) && !within(global, nearest)
+}
+
+func within(root, dir string) bool {
 	rel, err := filepath.Rel(root, dir)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+func resolved(dir string) string {
+	tail := ""
+	for {
+		if real, err := filepath.EvalSymlinks(dir); err == nil {
+			return filepath.Join(real, tail)
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return filepath.Join(dir, tail)
+		}
+		tail = filepath.Join(filepath.Base(dir), tail)
+		dir = parent
+	}
+}
+
+func Stem(path string) string {
+	return strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+}
+
+func IsDraft(path string) bool {
+	return strings.EqualFold(Stem(path), Draft)
+}
+
+func CheckFileName(path string) (bool, error) {
+	if !InScope(path) {
 		return false, nil
 	}
-	name := filepath.Base(abs)
-	stem := strings.TrimSuffix(name, filepath.Ext(name))
-	if stem == Draft {
+	if IsDraft(path) {
 		return false, nil
 	}
-	if _, err := version.Parse(stem); err != nil {
-		return false, fmt.Errorf("%s: %w", name, ErrFileName)
+	if _, err := version.Parse(Stem(path)); err != nil {
+		return false, fmt.Errorf("%s: %w", filepath.Base(path), ErrFileName)
 	}
 	return true, nil
 }
@@ -167,7 +200,7 @@ func (sk Skipped) String() string { return fmt.Sprintf("%s: %v", sk.Path, sk.Rea
 
 func GlobalDir() (string, error) {
 	if dir := os.Getenv(EnvHome); dir != "" {
-		return dir, nil
+		return filepath.Abs(dir)
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -337,8 +370,23 @@ func (s *Store) Read(kind DocumentKind, id ID, v version.Version) ([]byte, error
 	return os.ReadFile(path)
 }
 
+func Create(path string, data []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), dirPerm); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, filePerm)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return err
+	}
+	return f.Close()
+}
+
 func (s *Store) Write(kind DocumentKind, id ID, v version.Version, data []byte) error {
-	err := s.create(s.Path(kind, id, v), data)
+	err := Create(s.Path(kind, id, v), data)
 	if errors.Is(err, fs.ErrExist) {
 		return fmt.Errorf("%s %q version %s in %s: %w", kind, id, v, s.dir, ErrExists)
 	}
@@ -346,7 +394,7 @@ func (s *Store) Write(kind DocumentKind, id ID, v version.Version, data []byte) 
 }
 
 func (s *Store) WriteDraft(kind DocumentKind, id ID, data []byte) error {
-	err := s.create(s.DraftPath(kind, id), data)
+	err := Create(s.DraftPath(kind, id), data)
 	if errors.Is(err, fs.ErrExist) {
 		return fmt.Errorf("%s %q draft in %s: %w", kind, id, s.dir, ErrExists)
 	}
@@ -395,30 +443,14 @@ func (s *Store) EntryAt(path string) (*Entry, error) {
 		return nil, nil
 	}
 	e := &Entry{Path: path, ID: id}
-	stem := strings.TrimSuffix(file, filepath.Ext(file))
-	if strings.EqualFold(stem, Draft) {
+	if IsDraft(file) {
 		e.Draft = true
 		return e, nil
 	}
-	if e.Version, err = version.Parse(stem); err != nil {
+	if e.Version, err = version.Parse(Stem(file)); err != nil {
 		return nil, nil
 	}
 	return e, nil
-}
-
-func (s *Store) create(path string, data []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), dirPerm); err != nil {
-		return err
-	}
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, filePerm)
-	if err != nil {
-		return err
-	}
-	if _, err := f.Write(data); err != nil {
-		f.Close()
-		return err
-	}
-	return f.Close()
 }
 
 func (s *Store) Replace(kind DocumentKind, id ID, v version.Version, data []byte) error {

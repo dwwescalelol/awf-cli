@@ -44,7 +44,6 @@ func Create(s *store.Store, kind store.DocumentKind, id store.ID) error {
 	return s.WriteDraft(kind, id, data)
 }
 
-// CopyTask writes doc as the draft of the task id.
 func CopyTask(s *store.Store, id store.ID, doc *manifest.Task) error {
 	doc.Version, doc.SHA = version.Version{}, nil
 	data, err := manifest.MarshalTask(doc)
@@ -54,7 +53,6 @@ func CopyTask(s *store.Store, id store.ID, doc *manifest.Task) error {
 	return s.WriteDraft(store.Task, id, data)
 }
 
-// CopyWorkflow writes doc as the draft of the workflow id.
 func CopyWorkflow(s *store.Store, id store.ID, doc *manifest.Workflow) error {
 	doc.Name, doc.Version, doc.SHA = id.String(), version.Version{}, nil
 	data, err := manifest.Marshal(doc)
@@ -64,7 +62,6 @@ func CopyWorkflow(s *store.Store, id store.ID, doc *manifest.Workflow) error {
 	return s.WriteDraft(store.Workflow, id, data)
 }
 
-// Blank is a new document. A blank with a version is sealed, as a stored version is.
 func Blank(kind store.DocumentKind, id store.ID, v version.Version) ([]byte, error) {
 	if kind == store.Task {
 		t := blankTask(id.String())

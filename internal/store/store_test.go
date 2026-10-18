@@ -400,3 +400,45 @@ func TestKindOf(t *testing.T) {
 		t.Errorf("a.txt: got %v, want %v", err, ErrNotADocument)
 	}
 }
+
+func TestInScope(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv(EnvHome, filepath.Join(root, "global"))
+	scope := filepath.Join(root, "proj", dirName)
+	if err := os.MkdirAll(scope, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, "link")
+	if err := os.Symlink(scope, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "global", "nested", dirName), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		path string
+		want bool
+	}{
+		{filepath.Join(scope, "_", "x.yaml"), true},
+		{filepath.Join(scope, "missing", "deep", "x.yaml"), true},
+		{filepath.Join(link, "missing", "x.yaml"), true},
+		{filepath.Join(root, "global", "missing", "x.yaml"), true},
+		{filepath.Join(root, "proj", "x.yaml"), false},
+		{filepath.Join(root, "proj", "out", "x.yaml"), false},
+		{filepath.Join(root, "global", "nested", "out", "x.yaml"), false},
+	}
+	for _, tt := range tests {
+		if got := InScope(tt.path); got != tt.want {
+			t.Errorf("%s: got %v, want %v", tt.path, got, tt.want)
+		}
+	}
+}
+
+func TestGlobalDirAbsolute(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv(EnvHome, "rel")
+	dir, err := GlobalDir()
+	if err != nil || !filepath.IsAbs(dir) {
+		t.Errorf("got %q, %v, want an absolute path", dir, err)
+	}
+}

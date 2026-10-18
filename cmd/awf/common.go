@@ -75,6 +75,34 @@ func targetArgs(kind store.DocumentKind) cobra.PositionalArgs {
 	}
 }
 
+func destArgs(kind store.DocumentKind, dest string, required bool) cobra.PositionalArgs {
+	source := targetArgs(kind)
+	return func(cmd *cobra.Command, args []string) error {
+		file, _ := cmd.Flags().GetString("file")
+		n := sourceArgs(file)
+		switch {
+		case len(args) > n+1 && file != "":
+			return fmt.Errorf("accepts one %s with -f, received %d", dest, len(args))
+		case len(args) > n+1:
+			return fmt.Errorf("accepts a source %s and one %s, received %d", kind, dest, len(args))
+		}
+		if err := source(cmd, args[:min(n, len(args))]); err != nil {
+			return err
+		}
+		if required && len(args) < n+1 {
+			return fmt.Errorf("requires a %s", dest)
+		}
+		return nil
+	}
+}
+
+func sourceArgs(file string) int {
+	if file != "" {
+		return 0
+	}
+	return 1
+}
+
 // precheck reports a bad argument at cmd's own level, ahead of help and flag errors.
 func precheck(cmd *cobra.Command) error {
 	args := cmd.Flags().Args()
@@ -120,12 +148,8 @@ type document struct {
 func resolve(r request) (document, error) {
 	d := document{kind: r.kind, path: r.file}
 	if r.file != "" {
-		kind, err := store.KindOf(r.file)
-		if err != nil {
+		if err := checkKind(r.file, r.kind); err != nil {
 			return document{}, err
-		}
-		if kind != r.kind {
-			return document{}, fmt.Errorf("%s: a %s, want a %s: %w", r.file, kind, r.kind, errWrongKind)
 		}
 	}
 	var err error
@@ -140,6 +164,27 @@ func resolve(r request) (document, error) {
 	}
 	d.path = d.at.Path
 	return d, nil
+}
+
+func checkKind(path string, want store.DocumentKind) error {
+	kind, err := store.KindOf(path)
+	if err != nil {
+		return err
+	}
+	if kind != want {
+		return fmt.Errorf("%s: a %s, want a %s: %w", path, kind, want, errWrongKind)
+	}
+	return nil
+}
+
+func origin(d document) string {
+	switch {
+	case d.at != nil && d.at.Draft:
+		return fmt.Sprintf("%s %s", d.at.ID, store.Draft)
+	case d.at != nil:
+		return fmt.Sprintf("%s@%s", d.at.ID, d.at.Version)
+	}
+	return d.path
 }
 
 func writable(kind store.DocumentKind, id store.ID) error {

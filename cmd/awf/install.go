@@ -22,7 +22,7 @@ var (
 	errNoID        = errors.New("which document? add #<id>")
 	errAmbiguous   = errors.New("both a workflow and a task")
 	errUnbundled   = errors.New("has $ref tasks, ask its author to run awf seal and push")
-	errUnsealed    = errors.New("not sealed, ask its author to run awf seal and push")
+	errUnsealed    = errors.New("not sealed")
 	errConflict    = errors.New("already installed with a different sha")
 )
 
@@ -232,7 +232,7 @@ func check(kind store.DocumentKind, path string, data []byte, at *store.Entry) (
 		sha = f.Doc.SHA
 	}
 	if sha == nil {
-		return nil, fmt.Errorf("%s: %w", path, errUnsealed)
+		return nil, fmt.Errorf("%s: %w, ask its author to run awf seal and push", path, errUnsealed)
 	}
 	return sha, nil
 }

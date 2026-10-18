@@ -56,7 +56,6 @@ var (
 	errDraftPinned = errors.New("acts on a draft, which has no version")
 )
 
-// draftOf resolves the draft of the id r names in the local namespace.
 func draftOf(r request) (document, error) {
 	arg := r.args[0]
 	if strings.Contains(arg, "@") {
@@ -119,7 +118,7 @@ func checkNewer(d document, v version.Version) error {
 
 func sealTask(d document) ([]byte, string, version.Version, error) {
 	f, err := load.ReadTask(d.path, d.at)
-	if err := sealable(d.path, f != nil && f.Doc != nil && f.Doc.SHA != nil, err); err != nil {
+	if err := sealable(d.path, hasSHA(f), err); err != nil {
 		return nil, "", version.Version{}, err
 	}
 	f.Doc.SHA = nil
@@ -137,7 +136,7 @@ func sealTask(d document) ([]byte, string, version.Version, error) {
 
 func sealWorkflow(d document) ([]byte, string, version.Version, error) {
 	f, err := load.ReadWorkflow(d.path, d.scope, d.at)
-	if err := sealable(d.path, f != nil && f.Doc != nil && f.Doc.SHA != nil, err); err != nil {
+	if err := sealable(d.path, hasSHA(f), err); err != nil {
 		return nil, "", version.Version{}, err
 	}
 	if names := unsealed(f); len(names) > 0 {
@@ -168,6 +167,16 @@ func unsealed(f *load.WorkflowFile) []string {
 	}
 	slices.Sort(names)
 	return names
+}
+
+func hasSHA[F *load.TaskFile | *load.WorkflowFile](f F) bool {
+	switch f := any(f).(type) {
+	case *load.TaskFile:
+		return f != nil && f.Doc != nil && f.Doc.SHA != nil
+	case *load.WorkflowFile:
+		return f != nil && f.Doc != nil && f.Doc.SHA != nil
+	}
+	return false
 }
 
 func sealable(path string, sealed bool, err error) error {

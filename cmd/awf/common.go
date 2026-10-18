@@ -17,6 +17,7 @@ var (
 	errWrongKind   = errors.New("wrong document kind")
 	errNoPath      = errors.New("-f requires a <path>")
 	errIDAndFile   = errors.New("give an id or -f, not both")
+	errUseFile     = errors.New("use -f for a file path")
 )
 
 const kindsAnnotation = "kinds"
@@ -163,7 +164,7 @@ func parseTarget(arg string) (store.ID, version.Version, bool, error) {
 	name, pin, pinned := strings.Cut(arg, "@")
 	id, err := store.NewID(name)
 	if err != nil {
-		return "", version.Version{}, false, err
+		return "", version.Version{}, false, fmt.Errorf("%w, %w", err, errUseFile)
 	}
 	if !pinned {
 		return id, version.Version{}, false, nil

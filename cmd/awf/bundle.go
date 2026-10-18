@@ -10,9 +10,15 @@ import (
 )
 
 func bundleCmd() *cobra.Command {
-	workflow := documentCmd(store.Workflow, "Dereference a workflow's $ref tasks into one document", func(cmd *cobra.Command, r request) error {
+	workflow := &cobra.Command{
+		Use:   store.Workflow.String() + " <id>",
+		Short: "Dereference a workflow draft's $ref tasks into one document",
+		Args:  cobra.ExactArgs(1),
+	}
+	workflow.RunE = func(cmd *cobra.Command, args []string) error {
+		global, _ := cmd.Flags().GetBool("global")
 		out, _ := cmd.Flags().GetString("out")
-		data, err := bundle(r, out)
+		data, err := bundle(request{kind: store.Workflow, args: args, global: global}, out)
 		if err != nil {
 			return err
 		}
@@ -21,13 +27,14 @@ func bundleCmd() *cobra.Command {
 		}
 		_, err = os.Stdout.Write(data)
 		return err
-	})
+	}
 	workflow.Flags().StringP("out", "o", "", "write the bundled workflow to this path")
 	return kindCmd(&cobra.Command{
 		Use:   "bundle",
-		Short: "Dereference a workflow's $ref tasks into one document",
-		Long: `Dereference a workflow's $ref tasks into one document.
+		Short: "Dereference a workflow draft's $ref tasks into one document",
+		Long: `Dereference the $ref tasks of the workflow draft of <id> into one document.
 
+A sealed workflow carries its tasks inline, so only a draft has $ref tasks.
 A $ref is a path to a task file or a stored task pinned as [<namespace>#]<id>@<version>.
 A relative path resolves against the directory holding the store in scope.
 An id resolves in the store in scope. The bundled workflow prints to stdout,
@@ -36,10 +43,7 @@ or to the file given by -o. ` + readOnlyNote,
 }
 
 func bundle(r request, out string) ([]byte, error) {
-	if err := writableTarget(r); err != nil {
-		return nil, err
-	}
-	d, err := resolve(r)
+	d, err := draftOf(r)
 	if err != nil {
 		return nil, err
 	}

@@ -8,21 +8,14 @@ import (
 	"testing"
 
 	"github.com/dwwescalelol/awf-cli/internal/load"
+	"github.com/dwwescalelol/awf-cli/internal/scaffold"
 	"github.com/dwwescalelol/awf-cli/internal/store"
 )
 
 func TestValidateStored(t *testing.T) {
 	project(t)
-	wfDraft, err := create(store.Workflow, "deploy", false)
-	wf := wfDraft.path
-	if err != nil {
-		t.Fatal(err)
-	}
-	taskDraft, err := create(store.Task, "build", false)
-	task := taskDraft.path
-	if err != nil {
-		t.Fatal(err)
-	}
+	wf := versioned(t, store.Workflow, "deploy")
+	task := versioned(t, store.Task, "build")
 
 	if _, _, err := validate(request{kind: store.Workflow, args: []string{"deploy"}}); err != nil {
 		t.Fatalf("fresh workflow: %v", err)
@@ -33,7 +26,7 @@ func TestValidateStored(t *testing.T) {
 
 	rewrite(t, wf, "name: deploy", "name: other")
 	rewrite(t, wf, "version: 0.1.0\nsha", "version: 3.0.0\nsha")
-	_, _, err = validate(request{kind: store.Workflow, args: []string{"deploy"}})
+	_, _, err := validate(request{kind: store.Workflow, args: []string{"deploy"}})
 	if !errors.Is(err, store.ErrWrongName) || !errors.Is(err, store.ErrWrongVersion) {
 		t.Errorf("workflow: got %v, want both mismatches", err)
 	}
@@ -50,7 +43,7 @@ func TestValidateStored(t *testing.T) {
 	if want := rel + `:2:7: error: name "other", stored as "deploy": ` + store.ErrWrongName.Error(); problems[0].Error() != want {
 		t.Errorf("got %q, want %q", problems[0].Error(), want)
 	}
-	if _, _, err := validate(request{kind: store.Workflow, file: wf}); err != nil {
+	if _, _, err := validate(request{kind: store.Workflow, file: wf}); errors.Is(err, store.ErrWrongName) || errors.Is(err, store.ErrWrongVersion) {
 		t.Errorf("-f skips the check: got %v", err)
 	}
 
@@ -58,6 +51,23 @@ func TestValidateStored(t *testing.T) {
 	if _, _, err := validate(request{kind: store.Task, args: []string{"build"}}); !errors.Is(err, store.ErrWrongVersion) {
 		t.Errorf("task: got %v, want %v", err, store.ErrWrongVersion)
 	}
+}
+
+func versioned(t *testing.T, kind store.DocumentKind, id store.ID) string {
+	t.Helper()
+	data, err := scaffold.Blank(kind, id, scaffold.FirstVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := store.New(".awf")
+	if err := s.Write(kind, id, scaffold.FirstVersion, data); err != nil {
+		t.Fatal(err)
+	}
+	p, err := filepath.Abs(s.Path(kind, id, scaffold.FirstVersion))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
 }
 
 func rewrite(t *testing.T, path, old, new string) {

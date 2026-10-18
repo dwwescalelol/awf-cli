@@ -17,6 +17,7 @@ var (
 	errWrongKind   = errors.New("wrong document kind")
 	errNoPath      = errors.New("-f requires a <path>")
 	errIDAndFile   = errors.New("give an id or -f, not both")
+	errUseFile     = errors.New("use -f for a file path")
 )
 
 const kindsAnnotation = "kinds"
@@ -148,22 +149,11 @@ func writable(kind store.DocumentKind, id store.ID) error {
 	return fmt.Errorf("%s %q: %w, only %s is writable", kind, id, store.ErrReadOnly, store.Local)
 }
 
-func writableTarget(r request) error {
-	if r.file != "" {
-		return nil
-	}
-	id, _, _, err := parseTarget(r.args[0])
-	if err != nil {
-		return err
-	}
-	return writable(r.kind, id)
-}
-
 func parseTarget(arg string) (store.ID, version.Version, bool, error) {
 	name, pin, pinned := strings.Cut(arg, "@")
 	id, err := store.NewID(name)
 	if err != nil {
-		return "", version.Version{}, false, err
+		return "", version.Version{}, false, fmt.Errorf("%w, %w", err, errUseFile)
 	}
 	if !pinned {
 		return id, version.Version{}, false, nil
@@ -181,6 +171,13 @@ func locate(scope *store.Store, kind store.DocumentKind, arg string) (*store.Ent
 		return nil, err
 	}
 	if !pinned {
+		path, err := scope.FindDraft(kind, id)
+		if err == nil {
+			return &store.Entry{Path: path, ID: id, Draft: true}, nil
+		}
+		if !errors.Is(err, store.ErrNoDraft) {
+			return nil, err
+		}
 		if v, err = scope.Latest(kind, id); err != nil {
 			return nil, err
 		}

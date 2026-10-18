@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/dwwescalelol/awf-cli/internal/remote"
+	"github.com/dwwescalelol/awf-cli/internal/scaffold"
 	"github.com/dwwescalelol/awf-cli/internal/store"
 )
 
@@ -20,16 +21,11 @@ func publish(t *testing.T, repo, dir, task string) {
 		t.Fatal(err)
 	}
 	t.Chdir(dir)
-	for range 2 {
-		d, err := create(store.Workflow, "review", false)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, _, err := sealDocument(request{kind: store.Workflow, args: []string{"review@" + d.version.String()}}); err != nil {
-			t.Fatal(err)
-		}
+	for _, as := range []string{"0.1.0", "0.2.0"} {
+		sealed(t, store.Workflow, "review", as)
 	}
-	if _, err := create(store.Task, task, false); err != nil {
+	data := []byte("---\nopenawf: 0.1.0\nversion: 0.1.0\nsha: null\n---\n\n# " + task + "\n")
+	if err := store.New(".awf").Write(store.Task, store.ID(task), scaffold.FirstVersion, data); err != nil {
 		t.Fatal(err)
 	}
 	run := func(args ...string) {
@@ -56,7 +52,10 @@ func TestInstall(t *testing.T) {
 	t.Setenv("GIT_CONFIG_COUNT", "1")
 	t.Setenv("GIT_CONFIG_KEY_0", "url.file://"+filepath.ToSlash(base)+"/.insteadOf")
 	t.Setenv("GIT_CONFIG_VALUE_0", "https://example.com/")
-	root := project(t)
+	root, err := filepath.EvalSymlinks(project(t))
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	i, err := install("https://example.com/zaz/flows.git#review", "", false)
 	if err != nil {

@@ -128,18 +128,37 @@ func setup(t *testing.T) fixture {
 	root := t.TempDir()
 	t.Setenv(store.EnvHome, filepath.Join(root, "home"))
 	s := store.New(filepath.Join(root, ".awf"))
-	f := fixture{wf: create(t, s, store.Workflow, "deploy"), task: create(t, s, store.Task, "build")}
+	f := fixture{wf: draft(t, s, store.Workflow, "deploy"), task: create(t, s, store.Task, "build")}
 	f.text = strings.Replace(read(t, f.wf), "start: null", "start: build\n  build: null", 1) + "  build:\n    $ref: build@0.1.0\n"
 	return f
 }
 
 func create(t *testing.T, s *store.Store, kind store.DocumentKind, id store.ID) string {
 	t.Helper()
-	v, err := scaffold.Create(s, kind, id, version.Version{}, false)
+	v := scaffold.FirstVersion
+	if latest, err := s.Latest(kind, id); err == nil {
+		v = latest.NextMinor()
+	}
+	data, err := scaffold.Blank(kind, id, v)
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := s.Write(kind, id, v, data); err != nil {
+		t.Fatal(err)
+	}
 	return s.Path(kind, id, v)
+}
+
+func draft(t *testing.T, s *store.Store, kind store.DocumentKind, id store.ID) string {
+	t.Helper()
+	data, err := scaffold.Blank(kind, id, version.Version{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.WriteDraft(kind, id, data); err != nil {
+		t.Fatal(err)
+	}
+	return s.DraftPath(kind, id)
 }
 
 func read(t *testing.T, path string) string {

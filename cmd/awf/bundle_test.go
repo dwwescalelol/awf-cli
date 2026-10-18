@@ -14,9 +14,7 @@ import (
 
 func TestBundle(t *testing.T) {
 	root := project(t)
-	if _, err := create(store.Task, "build", false); err != nil {
-		t.Fatal(err)
-	}
+	sealed(t, store.Task, "build", "0.1.0")
 	wf, err := create(store.Workflow, "deploy", false)
 	if err != nil {
 		t.Fatal(err)
@@ -87,11 +85,7 @@ func TestBundleOut(t *testing.T) {
 
 func TestBundlePinMismatch(t *testing.T) {
 	project(t)
-	task, err := create(store.Task, "build", false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	rewrite(t, task.path, "version: 0.1.0", "version: 9.9.9")
+	rewrite(t, sealed(t, store.Task, "build", "0.1.0"), "version: 0.1.0", "version: 9.9.9")
 	wf, err := create(store.Workflow, "deploy", false)
 	if err != nil {
 		t.Fatal(err)
@@ -112,25 +106,28 @@ func TestBundlePinMismatch(t *testing.T) {
 }
 
 func TestBundleRejectsInvalidGraph(t *testing.T) {
-	root := project(t)
-	path := filepath.Join(root, "wf.yaml")
-	doc := "openawf: 0.1.0\nname: wf\nsha: null\nstart: a\norchestration:\n  a: ghost\ntasks:\n  a:\n    body: a\n"
-	if err := os.WriteFile(path, []byte(doc), 0o644); err != nil {
+	project(t)
+	wf, err := create(store.Workflow, "wf", false)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := bundle(request{kind: store.Workflow, file: path}, ""); !errors.Is(err, load.ErrNotATask) {
+	doc := "openawf: 0.1.0\nname: wf\nsha: null\nstart: a\norchestration:\n  a: ghost\ntasks:\n  a:\n    body: a\n"
+	if err := os.WriteFile(wf.path, []byte(doc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := bundle(request{kind: store.Workflow, args: []string{"wf"}}, ""); !errors.Is(err, load.ErrNotATask) {
 		t.Errorf("got %v, want %v", err, load.ErrNotATask)
 	}
 }
 
-func TestBundleRejectsTask(t *testing.T) {
+func TestBundleDraftOnly(t *testing.T) {
 	project(t)
-	task, err := create(store.Task, "build", false)
-	if err != nil {
-		t.Fatal(err)
+	sealed(t, store.Workflow, "deploy", "0.1.0")
+	if _, err := bundle(request{kind: store.Workflow, args: []string{"deploy"}}, ""); !errors.Is(err, store.ErrNoDraft) {
+		t.Errorf("no draft: got %v, want %v", err, store.ErrNoDraft)
 	}
-	if _, err := bundle(request{kind: store.Workflow, file: task.path}, ""); !errors.Is(err, errWrongKind) {
-		t.Errorf("got %v, want %v", err, errWrongKind)
+	if _, err := bundle(request{kind: store.Workflow, args: []string{"deploy@0.1.0"}}, ""); !errors.Is(err, errDraftPinned) {
+		t.Errorf("pinned: got %v, want %v", err, errDraftPinned)
 	}
 }
 

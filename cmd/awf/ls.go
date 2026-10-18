@@ -94,9 +94,12 @@ func formatListing(c contents) string {
 }
 
 func versions(d store.Document) string {
-	out := make([]string, 0, len(d.Versions))
+	out := make([]string, 0, len(d.Versions)+1)
 	for _, v := range d.Versions {
 		out = append(out, v.String())
+	}
+	if d.Draft {
+		out = append(out, store.Draft)
 	}
 	return strings.Join(out, ", ")
 }

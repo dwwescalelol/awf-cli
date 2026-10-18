@@ -2,14 +2,13 @@ openawf: 0.1.0
 name: feat-dev
 summary: What this workflow does.
 version: 0.1.0
-sha: null
+sha: sha256-2b1ad28f5421781f3df73a231c371a942ec3cb7e0fb08a5c8c355b6bdea8f052
 start: start
 orchestration:
   start: null
 tasks:
   start:
     version: 0.1.0
-    sha: null
     summary: What this task does.
     body: |
       # start

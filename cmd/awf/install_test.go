@@ -52,7 +52,10 @@ func TestInstall(t *testing.T) {
 	t.Setenv("GIT_CONFIG_COUNT", "1")
 	t.Setenv("GIT_CONFIG_KEY_0", "url.file://"+filepath.ToSlash(base)+"/.insteadOf")
 	t.Setenv("GIT_CONFIG_VALUE_0", "https://example.com/")
-	root := project(t)
+	root, err := filepath.EvalSymlinks(project(t))
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	i, err := install("https://example.com/zaz/flows.git#review", "", false)
 	if err != nil {

@@ -2,8 +2,19 @@ openawf: 0.1.0
 name: feat-dev
 summary: Plan, review and ship a feature.
 model: anthropic/claude-opus-5
+effort: medium
+metadata:
+  tags:
+    - dev
+  authors:
+    - Ada
+  icon: ./icon.svg
+  zeta: null
+  alpha: []
+license: Apache-2.0
 version: 0.2.0
 sha: null
+external-version: n8n-41
 start: plan
 orchestration:
   plan: review
@@ -11,6 +22,7 @@ orchestration:
     fail:
       task: plan
       retries: 2
+      session: resume
       x-runner:
         note: replan
     ok: ship
@@ -23,9 +35,17 @@ tasks:
     x-runner:
       cwd: .
   review:
+    external-version: rev-7
+    metadata:
+      tags:
+        - review
+    license: MIT
     model:
       - anthropic/claude-sonnet-5
       - openai/gpt-6
+    effort: high
+    max-turns: 10
+    timeout: 600000
     outcomes:
       ok:
         type: object
@@ -39,10 +59,13 @@ tasks:
     uses:
       - fs
       - gh
+    system: |
+      You review changes.
+      You never edit files.
     body: |
       # review
-    effort: high
-    max-turns: 10
+    x-zed: {}
+    x-alpha: null
   ship:
     $ref: ./ship.md
 mcp:
@@ -50,6 +73,8 @@ mcp:
     type: stdio
     allow: "*"
     command: mcp-fs
+    x-runner:
+      cwd: /tmp
   gh:
     type: http
     allow:
@@ -61,9 +86,9 @@ mcp:
     deny:
       - delete_file
     command: mcp-none
-license: Apache-2.0
-metadata:
-  tags:
-    - dev
 x-runner:
   mode: plan
+  b: 1
+  a: 2
+x-claude:
+  permission-mode: plan

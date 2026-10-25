@@ -1,0 +1,12 @@
+openawf: 0.1.0
+name: feat-dev
+model:
+  - anthropic/claude-opus-5
+  - anthropic/claude-opus-5
+sha: null
+start: done
+orchestration:
+  done: null
+tasks:
+  done:
+    body: done

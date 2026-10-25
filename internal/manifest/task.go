@@ -82,7 +82,7 @@ func DecodeTask(front []byte, body string) (*Task, error) {
 func MarshalTask(t *Task) ([]byte, error) {
 	front := *t
 	front.SHA, front.Body = nil, ""
-	fields, err := yaml.MarshalWithOptions(front, yaml.IndentSequence(true))
+	fields, err := yaml.MarshalWithOptions(front, yaml.UseLiteralStyleIfMultiline(true), yaml.IndentSequence(true))
 	if err != nil {
 		return nil, err
 	}

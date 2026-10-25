@@ -214,7 +214,6 @@ func TestSealTask(t *testing.T) {
 	}
 }
 
-// sealFile writes the sha into a file outside a scope.
 func sealFile(t *testing.T, kind store.DocumentKind, path string) {
 	t.Helper()
 	d := document{kind: kind, path: path}
@@ -262,5 +261,83 @@ func TestSealReadOnly(t *testing.T) {
 	}
 	if _, _, err := validate(request{kind: store.Task, args: []string{"acme#build"}}); err != nil {
 		t.Errorf("validate: %v", err)
+	}
+}
+
+func TestInlineTaskSHA(t *testing.T) {
+	project(t)
+	sealed(t, store.Task, "build", "0.1.0")
+	wf, err := create(store.Workflow, "deploy", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rewrite(t, wf.path, "start: start", "start: build")
+	rewrite(t, wf.path, "  start: null", "  build: null")
+	data, err := os.ReadFile(wf.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	head, _, _ := strings.Cut(string(data), "tasks:")
+	if err := os.WriteFile(wf.path, []byte(head+"tasks:\n  build:\n    $ref: build@0.1.0\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stamp(t, wf.path, "0.1.0")
+	path, _, err := sealDocument(request{kind: store.Workflow, args: []string{"deploy"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := importDocument(request{kind: store.Workflow, file: path, args: []string{"copy"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := validate(request{kind: store.Workflow, args: []string{"copy"}}); err != nil {
+		t.Fatalf("imported: %v", err)
+	}
+	rewrite(t, path, "# build", "# edited")
+	draft := filepath.Join(filepath.Dir(filepath.Dir(path)), "copy", store.Draft+".yaml")
+	rewrite(t, draft, "# build", "# edited")
+	if _, _, err := validate(request{kind: store.Workflow, args: []string{"copy"}}); !errors.Is(err, seal.ErrMismatch) {
+		t.Errorf("edited inline task: got %v, want %v", err, seal.ErrMismatch)
+	}
+}
+
+func TestInlineTaskOwnSource(t *testing.T) {
+	project(t)
+	d, err := create(store.Task, "build", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rewrite(t, d.path, "openawf: 0.1.0\n", "openawf: 0.1.0\nsource: https://example.com/build.md\n")
+	sealed := func(kind store.DocumentKind, id string) {
+		t.Helper()
+		path := d.path
+		if kind == store.Workflow {
+			path = filepath.Join(filepath.Dir(filepath.Dir(filepath.Dir(d.path))), "workflow", id, store.Draft+".yaml")
+		}
+		stamp(t, path, "0.1.0")
+		if _, _, err := sealDocument(request{kind: kind, args: []string{id}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sealed(store.Task, "build")
+	wf, err := create(store.Workflow, "deploy", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rewrite(t, wf.path, "start: start", "start: build")
+	rewrite(t, wf.path, "  start: null", "  build: null")
+	data, err := os.ReadFile(wf.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	head, _, _ := strings.Cut(string(data), "tasks:")
+	if err := os.WriteFile(wf.path, []byte(head+"tasks:\n  build:\n    $ref: build@0.1.0\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := validate(request{kind: store.Workflow, args: []string{"deploy"}}); err != nil {
+		t.Fatalf("draft: %v", err)
+	}
+	sealed(store.Workflow, "deploy")
+	if _, _, err := validate(request{kind: store.Workflow, args: []string{"deploy"}}); err != nil {
+		t.Errorf("sealed: %v", err)
 	}
 }

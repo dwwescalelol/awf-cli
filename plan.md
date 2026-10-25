@@ -225,3 +225,8 @@ The TUI belongs on `run`, not `render`. `render`'s HTML already covers static do
 4. edge and branch rules
 
 Write each decision into `versions/0.1.0.md` as the CLI makes it, rather than up front.
+
+## Known bugs
+
+1. An inline task's `source` is forgeable when its task was sealed without one. Inlining sets `source` to the `$ref`, and the inline sha check retries with `source` cleared, so any `source` string passes. The sha does not tell a source written by inlining from one written by hand. Next to fix.
+2. On a case-insensitive filesystem, a path into the global store spelled in a different case passes `store.InScope`. `within` compares strings, and `EvalSymlinks` keeps the given case, so `export` can write a version into `$AWF_HOME`.

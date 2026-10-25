@@ -80,7 +80,6 @@ func (f *TaskFile) read(front []byte, body string, at *store.Entry) []error {
 
 var ErrUnsealedVersion = errors.New("an unsealed document in an awf scope is a draft, name it draft or seal it")
 
-// named checks the file name of a document in a scope, and that a version is sealed.
 func named(path string, unsealed bool) []error {
 	versioned, err := store.CheckFileName(path)
 	switch {
@@ -90,6 +89,27 @@ func named(path string, unsealed bool) []error {
 		return []error{onValue("sha", ErrUnsealedVersion)}
 	}
 	return nil
+}
+
+func inlineSeals(doc *manifest.Workflow) []error {
+	var errs []error
+	for _, name := range sorted(doc.Tasks) {
+		t := doc.Tasks[name].Task
+		if t == nil || t.SHA == nil {
+			continue
+		}
+		standalone := *t
+		standalone.OpenAWF = doc.OpenAWF
+		err := seal.CheckTask(&standalone)
+		if err != nil {
+			standalone.Source = ""
+			err = seal.CheckTask(&standalone)
+		}
+		if err != nil {
+			errs = append(errs, onValue("tasks/"+name+"/sha", err))
+		}
+	}
+	return errs
 }
 
 func ReadWorkflow(path string, s *store.Store, at *store.Entry) (*WorkflowFile, error) {
@@ -149,6 +169,7 @@ func (f *WorkflowFile) read(path string, s *store.Store, at *store.Entry, read R
 	if err := at.CheckVersion(f.Doc.Version); err != nil {
 		errs = append(errs, onValue("version", err))
 	}
+	errs = append(errs, inlineSeals(f.Doc)...)
 	if len(errs) > 0 {
 		return errs
 	}

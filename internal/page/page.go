@@ -4,8 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"path/filepath"
-	"strings"
 
 	"github.com/dwwescalelol/awf-cli/internal/load"
 	"github.com/dwwescalelol/awf-cli/internal/render"
@@ -20,13 +18,13 @@ func Document(w io.Writer, kind store.DocumentKind, path string, data []byte, s 
 	}
 	f, err := load.ParseWorkflow(path, data, s, at, read)
 	if err != nil {
-		return invalid(w, path, render.WorkflowHeader(fileName(path), f.Doc), f.Source, err, scope, live)
+		return invalid(w, path, render.WorkflowHeader(store.Stem(path), f.Doc), f.Source, err, scope, live)
 	}
 	return render.Workflow(w, path, f.Source, f.Doc, f.Compiled, scope, live)
 }
 
 func task(w io.Writer, path string, data []byte, at *store.Entry) error {
-	name := fileName(path)
+	name := store.Stem(path)
 	if at != nil {
 		name = at.ID.String()
 	}
@@ -42,8 +40,4 @@ func invalid(w io.Writer, path string, h render.Header, source []byte, cause err
 		return err
 	}
 	return fmt.Errorf("%s: %w", path, ErrInvalid)
-}
-
-func fileName(path string) string {
-	return strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
 }

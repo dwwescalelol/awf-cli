@@ -26,8 +26,8 @@ func run(args []string) error {
 		Version:       build.Version,
 	}
 	root.SetVersionTemplate("awf {{.Version}}\n")
-	root.PersistentFlags().Bool("global", false, "act on the global store: $AWF_HOME, deafults to ~/.awf")
-	root.AddCommand(bundleCmd(), importCmd(), initCmd(), installCmd(), lsCmd(), lspCmd(), newCmd(), renderCmd(), sealCmd(), uiCmd(), validateCmd())
+	root.PersistentFlags().Bool("global", false, "act on the global store: $AWF_HOME, defaults to ~/.awf")
+	root.AddCommand(bundleCmd(), exportCmd(), importCmd(), initCmd(), installCmd(), lsCmd(), lspCmd(), newCmd(), renderCmd(), sealCmd(), uiCmd(), validateCmd())
 
 	// Cobra checks --help and flag errors before positional arguments. A bad
 	// argument reports first on every path.

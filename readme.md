@@ -46,6 +46,7 @@ Commands that act on a document take its kind, then a target: `awf <command> <ki
 | `awf validate <kind> <target>` | Check a document against the spec. |
 | `awf seal <kind> <id>` | Validate the draft of `<id>` in `_` and write its sha. The draft needs a `version`, newer than its latest version, and moves to that version's file. A sealed document needs a new draft to change. |
 | `awf bundle workflow <id>` | Inline the `$ref` tasks of the draft of `<id>` in `_` into one document. A sealed workflow carries its tasks inline. |
+| `awf export <kind> <target> <path>` | Copy a sealed document to `<path>`, a file outside any awf scope. Refuses a draft, an unsealed file, and an existing `<path>`. |
 | `awf render <kind> <target>` | Open a document as an HTML page in the browser. |
 | `awf ui` | Browse the store's workflows in the browser. |
 | `awf lsp` | Run the OpenAWF language server over stdio. |

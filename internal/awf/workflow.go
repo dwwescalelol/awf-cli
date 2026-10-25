@@ -22,7 +22,7 @@ func (s *State) IsTerminal() bool {
 }
 
 type Edge struct {
-	On      string
+	On      *Outcome
 	To      *State
 	Retries *int
 	Session Session

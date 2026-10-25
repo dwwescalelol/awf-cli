@@ -411,21 +411,24 @@ func (g *graph) label(e awf.Edge, x, y float64, end bool) (float64, float64) {
 	if e.Session == awf.Resume {
 		policy = append(policy, "resume")
 	}
-	if e.On == "" && len(policy) == 0 {
+	if e.On == nil && len(policy) == 0 {
 		return x, x
 	}
 	lines := 0
-	if e.On != "" {
+	if e.On != nil {
 		lines++
 	}
 	if len(policy) > 0 {
 		lines++
 	}
-	l := edgeLabel{X: x, Y: y - float64(lines-1)*7 + 4, Anchor: "start", On: string(e.On), Policy: strings.Join(policy, ", ")}
+	l := edgeLabel{X: x, Y: y - float64(lines-1)*7 + 4, Anchor: "start", Policy: strings.Join(policy, ", ")}
+	if e.On != nil {
+		l.On = e.On.Name
+	}
 	if end {
 		l.Anchor = "end"
 	}
-	if e.On != "" {
+	if e.On != nil {
 		l.DY = 14
 	}
 	g.Labels = append(g.Labels, l)

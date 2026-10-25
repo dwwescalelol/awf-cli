@@ -141,7 +141,7 @@ func edges(name string, node manifest.Transition, states map[string]*awf.State, 
 		if len(outcomes) > 0 {
 			return nil, []error{onKey(path, fmt.Errorf("%s: %w on %q", path, ErrMustBranch, outcomes))}
 		}
-		e, errs := edge(path, "", *node.Edge, states)
+		e, errs := edge(path, nil, *node.Edge, states)
 		return []awf.Edge{e}, errs
 	}
 
@@ -149,19 +149,21 @@ func edges(name string, node manifest.Transition, states map[string]*awf.State, 
 		return nil, []error{onKey(path, fmt.Errorf("%s: %w", path, ErrNoOutcomes))}
 	}
 
+	declared := states[name].Task.Outcomes
 	var errs []error
 	out := make([]awf.Edge, 0, len(node.Branch))
 	for _, on := range sorted(node.Branch) {
-		if !slices.Contains(outcomes, on) {
+		i := slices.IndexFunc(declared, func(o awf.Outcome) bool { return o.Name == on })
+		if i < 0 {
 			errs = append(errs, onKey(path+"/"+on, fmt.Errorf("%s/%s: %w of %q", path, on, ErrNotAnOutcome, name)))
 			continue
 		}
-		e, err := edge(path+"/"+on, on, node.Branch[on], states)
+		e, err := edge(path+"/"+on, &declared[i], node.Branch[on], states)
 		out, errs = append(out, e), append(errs, err...)
 	}
-	for _, on := range outcomes {
-		if _, ok := node.Branch[on]; !ok {
-			errs = append(errs, onKey(path+"/"+on, fmt.Errorf("%s/%s: %w", path, on, ErrNoEdge)))
+	for _, o := range declared {
+		if _, ok := node.Branch[o.Name]; !ok {
+			errs = append(errs, onKey(path+"/"+o.Name, fmt.Errorf("%s/%s: %w", path, o.Name, ErrNoEdge)))
 		}
 	}
 	return out, errs
@@ -169,19 +171,19 @@ func edges(name string, node manifest.Transition, states map[string]*awf.State, 
 
 func targets(path string, node manifest.Transition, states map[string]*awf.State) ([]awf.Edge, []error) {
 	if node.Edge != nil {
-		e, errs := edge(path, "", *node.Edge, states)
+		e, errs := edge(path, nil, *node.Edge, states)
 		return []awf.Edge{e}, errs
 	}
 	var errs []error
 	out := make([]awf.Edge, 0, len(node.Branch))
 	for _, on := range sorted(node.Branch) {
-		e, err := edge(path+"/"+on, on, node.Branch[on], states)
+		e, err := edge(path+"/"+on, &awf.Outcome{Name: on}, node.Branch[on], states)
 		out, errs = append(out, e), append(errs, err...)
 	}
 	return out, errs
 }
 
-func edge(path string, on string, doc manifest.Edge, states map[string]*awf.State) (awf.Edge, []error) {
+func edge(path string, on *awf.Outcome, doc manifest.Edge, states map[string]*awf.State) (awf.Edge, []error) {
 	to, ok := states[doc.Task]
 	if !ok {
 		return awf.Edge{}, []error{onValue(path, fmt.Errorf("%s %q: %w", path, doc.Task, ErrNotATask))}

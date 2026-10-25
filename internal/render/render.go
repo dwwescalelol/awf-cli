@@ -151,7 +151,11 @@ func Workflow(out io.Writer, path string, source []byte, doc *manifest.Workflow,
 		t.Terminal = s.IsTerminal()
 		t.Unreachable = unreachable[s]
 		for _, e := range s.Out {
-			t.Next = append(t.Next, Edge{On: e.On, To: e.To.Task.Name, Retries: e.Retries, Resume: e.Session == awf.Resume})
+			var on string
+			if e.On != nil {
+				on = e.On.Name
+			}
+			t.Next = append(t.Next, Edge{On: on, To: e.To.Task.Name, Retries: e.Retries, Resume: e.Session == awf.Resume})
 		}
 		p.Tasks = append(p.Tasks, t)
 	}

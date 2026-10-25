@@ -31,10 +31,13 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{
 var markdown = goldmark.New(goldmark.WithExtensions(extension.GFM))
 
 type Page struct {
-	Name     string
-	Version  string
-	Summary  string
-	Model    string
+	Name    string
+	Version string
+	Summary string
+	// Models is the default model, or its fallback chain in order.
+	Models   []string
+	Effort   string
+	About    About
 	SHA      string
 	Start    string
 	Path     string
@@ -80,21 +83,44 @@ type Link struct {
 	Invalid bool
 }
 
+// About is what a workflow or task says about itself in license,
+// external-version and metadata.
+type About struct {
+	License         string
+	ExternalVersion string
+	Tags            []string
+	Authors         []string
+	Icon            string
+}
+
 type TaskView struct {
-	Name        string
-	Version     string
-	Summary     string
-	Model       string
+	Name     string
+	Version  string
+	Summary  string
+	Models   []string
+	Effort   string
+	MaxTurns int
+	// Timeout is the attempt limit in milliseconds, written in its largest
+	// whole unit.
+	Timeout     string
 	SHA         string
-	Outcomes    []string
+	About       About
+	Outcomes    []OutcomeView
 	Uses        []Use
 	Input       string
 	Output      string
+	System      template.HTML
 	Body        template.HTML
 	Next        []Edge
 	Start       bool
 	Terminal    bool
 	Unreachable bool
+}
+
+// OutcomeView is one outcome a task may report and the schema of its result.
+type OutcomeView struct {
+	Name   string
+	Schema string
 }
 
 type Edge struct {
@@ -132,7 +158,9 @@ func Workflow(out io.Writer, path string, source []byte, doc *manifest.Workflow,
 		Name:    w.Name,
 		Version: versionString(w.Version),
 		Summary: w.Summary,
-		Model:   strings.Join(w.Model, ", "),
+		Models:  w.Model,
+		Effort:  w.Effort,
+		About:   about(doc.License, doc.ExternalVersion, doc.Metadata),
 		SHA:     sha(doc.SHA),
 		Path:    path,
 		Graph:   graph,
@@ -193,6 +221,10 @@ func Task(out io.Writer, path, name string, source []byte, doc *manifest.Task) e
 		Version:  doc.Version,
 		Summary:  doc.Summary,
 		Model:    doc.Model,
+		Effort:   string(doc.Effort),
+		MaxTurns: doc.MaxTurns,
+		Timeout:  doc.Timeout,
+		System:   string(doc.System),
 		Input:    doc.Input,
 		Output:   doc.Output,
 		Outcomes: outcomes,
@@ -209,6 +241,7 @@ func Task(out io.Writer, path, name string, source []byte, doc *manifest.Task) e
 		Name:    name,
 		Version: t.Version,
 		Summary: doc.Summary,
+		About:   t.About,
 		SHA:     sha(doc.SHA),
 		Path:    path,
 		Tasks:   []TaskView{t},
@@ -270,8 +303,12 @@ func run(out io.Writer, name string, data any) error {
 }
 
 func task(t *awf.Task, doc *manifest.Task) (TaskView, error) {
-	var body bytes.Buffer
-	if err := markdown.Convert([]byte(t.Body), &body); err != nil {
+	body, err := prose(t.Body)
+	if err != nil {
+		return TaskView{}, err
+	}
+	system, err := prose(t.System)
+	if err != nil {
 		return TaskView{}, err
 	}
 	input, err := schemaText(t.Input)
@@ -283,24 +320,69 @@ func task(t *awf.Task, doc *manifest.Task) (TaskView, error) {
 		return TaskView{}, err
 	}
 	out := TaskView{
-		Name:    t.Name,
-		Version: versionString(t.Version),
-		Summary: t.Summary,
-		Model:   strings.Join(t.Model, ", "),
-		Input:   input,
-		Output:  output,
-		Body:    template.HTML(body.String()),
+		Name:     t.Name,
+		Version:  versionString(t.Version),
+		Summary:  t.Summary,
+		Models:   t.Model,
+		Effort:   t.Effort,
+		MaxTurns: t.MaxTurns,
+		Timeout:  millis(t.Timeout),
+		Input:    input,
+		Output:   output,
+		System:   system,
+		Body:     body,
 	}
 	if doc != nil {
 		out.SHA = sha(doc.SHA)
+		out.About = about(doc.License, doc.ExternalVersion, doc.Metadata)
 	}
 	for _, o := range t.Outcomes {
-		out.Outcomes = append(out.Outcomes, o.Name)
+		schema, err := schemaText(o.Schema)
+		if err != nil {
+			return TaskView{}, err
+		}
+		out.Outcomes = append(out.Outcomes, OutcomeView{Name: o.Name, Schema: schema})
 	}
 	for _, u := range t.Uses {
 		out.Uses = append(out.Uses, Use{Label: u.String(), Server: u.Server.Name})
 	}
 	return out, nil
+}
+
+func prose(text string) (template.HTML, error) {
+	if text == "" {
+		return "", nil
+	}
+	var out bytes.Buffer
+	if err := markdown.Convert([]byte(text), &out); err != nil {
+		return "", err
+	}
+	return template.HTML(out.String()), nil
+}
+
+func about(license, external string, m manifest.Metadata) About {
+	return About{
+		License:         license,
+		ExternalVersion: external,
+		Tags:            m.Tags(),
+		Authors:         m.Authors(),
+		Icon:            m.Icon(),
+	}
+}
+
+// millis writes a duration in milliseconds in its largest whole unit.
+func millis(ms int) string {
+	switch {
+	case ms <= 0:
+		return ""
+	case ms%3_600_000 == 0:
+		return strconv.Itoa(ms/3_600_000) + " h"
+	case ms%60_000 == 0:
+		return strconv.Itoa(ms/60_000) + " min"
+	case ms%1000 == 0:
+		return strconv.Itoa(ms/1000) + " s"
+	}
+	return strconv.Itoa(ms) + " ms"
 }
 
 // flowOrder lists states breadth-first from the start, so tasks read in the

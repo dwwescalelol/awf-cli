@@ -1,0 +1,923 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>feat-dev-small 0.3.0</title>
+<style>
+:root {
+  --bg: #f1f3f6;
+  --surface: #ffffff;
+  --sunken: #f6f7f9;
+  --ink: #16202b;
+  --ink-2: #3a4655;
+  --muted: #5d6877;
+  --rule: #dbe0e7;
+  --accent: #3043c4;
+  --accent-soft: #e7eafc;
+  --edge: #7b8594;
+  --dot: #cfd5de;
+  --warn: #8a5300;
+  --warn-soft: #fff2d9;
+  --bad: #b3261e;
+  --bad-soft: #fdecea;
+  --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not(:has(body.vscode-light, body.vscode-high-contrast-light)) {
+    --bg: #0e1217;
+    --surface: #161b22;
+    --sunken: #11161c;
+    --ink: #e4e8ee;
+    --ink-2: #c3cad4;
+    --muted: #939eac;
+    --rule: #28303a;
+    --accent: #95a3ff;
+    --accent-soft: #202848;
+    --edge: #6f7a88;
+    --dot: #242c36;
+    --warn: #f1b85a;
+    --warn-soft: #2f2412;
+    --bad: #ff8a80;
+    --bad-soft: #3a1714;
+    color-scheme: dark;
+  }
+}
+:root:has(body.vscode-dark), :root:has(body.vscode-high-contrast:not(.vscode-high-contrast-light)) {
+  --bg: #0e1217;
+  --surface: #161b22;
+  --sunken: #11161c;
+  --ink: #e4e8ee;
+  --ink-2: #c3cad4;
+  --muted: #939eac;
+  --rule: #28303a;
+  --accent: #95a3ff;
+  --accent-soft: #202848;
+  --edge: #6f7a88;
+  --dot: #242c36;
+  --warn: #f1b85a;
+  --warn-soft: #2f2412;
+  --bad: #ff8a80;
+  --bad-soft: #3a1714;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-padding-top: 16px; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.55 var(--sans);
+}
+a { color: var(--accent); }
+code, pre, .id { font-family: var(--mono); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+.bar { border-bottom: 1px solid var(--rule); color: var(--muted); font-size: 13px; }
+.bar-inner {
+  display: flex; justify-content: space-between; align-items: center; gap: 16px;
+  max-width: 1280px; margin: 0 auto; padding: 10px 24px;
+}
+.switches { display: flex; align-items: center; gap: 8px; flex: none; }
+.switches .static, .menu > summary {
+  display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px;
+  font: 500 13.5px var(--mono); color: var(--ink); border: 1px solid transparent; border-radius: 8px;
+}
+.menu { position: relative; }
+.menu > summary { list-style: none; cursor: pointer; border-color: var(--rule); background: var(--surface); }
+.menu > summary::-webkit-details-marker { display: none; }
+.menu > summary::after {
+  content: ""; width: 6px; height: 6px; margin: -3px 0 0 2px;
+  border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(45deg);
+}
+.menu > summary:hover, .menu[open] > summary { border-color: var(--accent); }
+.count { font: 600 11.5px var(--sans); color: var(--muted); background: var(--sunken); border-radius: 999px; padding: 1px 7px; }
+.menu-list {
+  position: absolute; z-index: 10; top: calc(100% + 6px); left: 0; min-width: 240px; max-height: 60vh; overflow: auto;
+  padding: 4px; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px;
+  box-shadow: 0 12px 32px -12px rgba(15, 23, 42, .28);
+}
+.menu-list a {
+  display: flex; justify-content: space-between; align-items: center; gap: 16px;
+  padding: 7px 10px; border-radius: 6px; color: var(--ink); text-decoration: none; font: 13.5px var(--mono);
+}
+.menu-list a:hover, .menu-list a:focus-visible { background: var(--sunken); outline: none; }
+.menu-list a[aria-current] { color: var(--accent); font-weight: 600; }
+.menu-list .entry { display: inline-flex; align-items: baseline; gap: 10px; }
+.menu-list .pill { font-size: 11.5px; padding: 3px 7px; }
+.menu-list .note { font: 12px var(--sans); color: var(--muted); font-weight: 400; }
+.bar .scope { display: flex; gap: 8px; min-width: 0; }
+.bar .scope-label { flex: none; }
+.bar .path { color: var(--ink-2); font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+
+header.doc { padding: 36px 24px 28px; max-width: 1280px; margin: 0 auto; }
+.title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 14px; }
+.title h1 {
+  margin: 0; font: 600 clamp(28px, 4.2vw, 40px)/1.1 var(--mono);
+  letter-spacing: -0.02em; overflow-wrap: anywhere;
+}
+.title .ver { font: 500 18px var(--mono); color: var(--muted); }
+.pill {
+  display: inline-block; font-size: 12.5px; font-weight: 600; line-height: 1;
+  padding: 5px 9px; border-radius: 999px; border: 1px solid var(--rule); color: var(--muted);
+  align-self: center;
+}
+.pill.sealed { border-color: transparent; background: var(--accent-soft); color: var(--accent); }
+.summary { margin: 12px 0 0; font-size: 17px; color: var(--ink-2); max-width: 68ch; }
+dl.meta { display: flex; flex-wrap: wrap; gap: 8px 32px; margin: 22px 0 0; font-size: 13.5px; }
+dl.meta div { min-width: 0; }
+dl.meta dt { color: var(--muted); }
+dl.meta dd { margin: 2px 0 0; font-family: var(--mono); overflow-wrap: anywhere; }
+dl.meta dd.chips { font-family: var(--sans); }
+.title .icon { width: 36px; height: 36px; object-fit: contain; align-self: center; border-radius: 6px; }
+.task .name .icon { width: 16px; height: 16px; object-fit: contain; vertical-align: -2px; margin-right: 8px; border-radius: 3px; }
+ol.chain { margin: 0; padding-left: 2.2ch; }
+ol.chain li { font-family: var(--mono); }
+ol.chain li::marker { color: var(--muted); }
+.chain-note { color: var(--muted); font-family: var(--sans); font-size: 12px; }
+.pill.invalid { border-color: transparent; background: var(--bad-soft); color: var(--bad); font: inherit; font-size: 12.5px; font-weight: 600; line-height: 1; cursor: pointer; }
+.menu-list .pill.invalid { cursor: inherit; font-size: 11.5px; }
+.overlay {
+  position: fixed; inset: 0; z-index: 50; display: grid; place-items: start center; overflow: auto;
+  padding: 10vh 16px 32px; background: rgba(8, 11, 16, .62); backdrop-filter: blur(2px);
+}
+.overlay[hidden] { display: none; }
+.overlay-panel {
+  width: min(820px, 100%); background: var(--surface); border: 1px solid var(--rule); border-top: 4px solid var(--bad);
+  border-radius: 12px; padding: 20px 22px; box-shadow: 0 24px 64px -16px rgba(0, 0, 0, .45);
+}
+.overlay-head { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; }
+.overlay-head h2 { margin: 0; color: var(--bad); }
+.overlay-path { margin: 6px 0 14px; font: 13px var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+.overlay-errors { white-space: pre-wrap; color: var(--bad); background: var(--bad-soft); border-color: transparent; font-size: 13px; }
+.overlay-hint { margin: 14px 0 0; font-size: 13.5px; color: var(--muted); }
+.warnings { margin: 20px 0 0; padding: 10px 14px; border-radius: 8px; background: var(--warn-soft); color: var(--warn); font-size: 13.5px; list-style: none; }
+.warnings li { font-family: var(--mono); }
+
+.layout.single { grid-template-columns: minmax(0, 920px); }
+.layout.single details.task > summary { display: none; }
+.layout.single .task-body { padding-top: 18px; padding-left: 18px; }
+.layout {
+  display: grid; grid-template-columns: minmax(280px, max-content) minmax(0, 1fr);
+  gap: 28px; max-width: 1280px; margin: 0 auto; padding: 0 24px 64px; align-items: start;
+}
+
+aside.graph {
+  position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto;
+  background-color: var(--surface);
+  background-image: radial-gradient(var(--dot) 1px, transparent 1.2px);
+  background-size: 14px 14px;
+  border: 1px solid var(--rule); border-radius: 12px; padding: 8px;
+  max-width: 460px;
+}
+aside.graph .legend { display: flex; gap: 14px; flex-wrap: wrap; padding: 4px 10px 8px; font-size: 12px; color: var(--muted); }
+aside.graph .legend span { display: inline-flex; align-items: center; gap: 6px; }
+aside.graph .legend svg { flex: none; }
+.fsm { display: block; max-width: 100%; height: auto; font-family: var(--mono); }
+.fsm .box { fill: var(--surface); stroke: var(--ink-2); stroke-width: 1.3; transition: fill .15s, stroke .15s; }
+.fsm .inner { fill: none; stroke: var(--ink-2); stroke-width: 1; }
+.fsm .node text { font-size: 13px; fill: var(--ink); text-anchor: middle; pointer-events: none; }
+.fsm .node { cursor: pointer; }
+.fsm .node:hover .box { stroke: var(--accent); }
+.fsm .node.unreached .box { stroke-dasharray: 4 3; }
+.fsm .node.unreached text { fill: var(--muted); }
+.fsm .node.current .box { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; }
+.fsm .node.current .inner { stroke: var(--accent); }
+.fsm .node.current text { fill: var(--accent); font-weight: 600; }
+.fsm .edge { fill: none; stroke: var(--edge); stroke-width: 1.4; transition: stroke .15s; }
+.fsm .edge.lit { stroke: var(--accent); stroke-width: 1.8; }
+.fsm .arrowhead { fill: var(--edge); }
+.fsm .entry { fill: var(--ink); }
+.fsm .label { font-size: 11.5px; paint-order: stroke; stroke: var(--surface); stroke-width: 5px; stroke-linejoin: round; }
+.fsm .label .outcome { fill: var(--ink); font-weight: 600; }
+.fsm .label .policy { fill: var(--muted); font-size: 10.5px; }
+
+main { min-width: 0; }
+h2 { font-size: 19px; font-weight: 650; margin: 0 0 12px; letter-spacing: -0.01em; }
+h2 .count { color: var(--muted); font-weight: 500; font-size: 15px; margin-left: 6px; }
+.section-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+button.toggle {
+  font: 500 13px var(--sans); color: var(--accent); background: none; border: 0; padding: 4px 2px; cursor: pointer;
+}
+section + section { margin-top: 44px; }
+
+.tasks { background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; overflow: hidden; }
+details.task { border-top: 1px solid var(--rule); scroll-margin-top: 16px; }
+details.task:first-child { border-top: 0; }
+details.task > summary {
+  list-style: none; cursor: pointer; display: grid;
+  grid-template-columns: 14px minmax(0, max-content) minmax(0, 1fr) auto; gap: 4px 12px; align-items: baseline;
+  padding: 14px 18px; border-left: 3px solid transparent;
+}
+details.task > summary::-webkit-details-marker { display: none; }
+details.task > summary::before {
+  content: ""; width: 7px; height: 7px; border-right: 1.6px solid var(--muted); border-bottom: 1.6px solid var(--muted);
+  transform: translateY(-2px) rotate(-45deg); transition: transform .15s; justify-self: center;
+}
+details.task[open] > summary::before { transform: translateY(-4px) rotate(45deg); }
+details.task.current > summary { border-left-color: var(--accent); background: var(--sunken); }
+.task .name { font: 600 15px var(--mono); overflow-wrap: anywhere; }
+.task .name .v { font-weight: 400; color: var(--muted); margin-left: 8px; font-size: 13px; }
+.task .brief { color: var(--muted); font-size: 14px; min-width: 0; }
+.tags { display: flex; gap: 6px; }
+.tag { font-size: 11.5px; font-weight: 600; padding: 2px 7px; border-radius: 5px; background: var(--sunken); color: var(--muted); border: 1px solid var(--rule); white-space: nowrap; }
+.tag.start, .tag.end, .tag.sealed { color: var(--accent); background: var(--accent-soft); border-color: transparent; }
+.tag.warn { color: var(--warn); background: var(--warn-soft); border-color: transparent; }
+
+.task-body { padding: 4px 18px 22px 47px; }
+.facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 20px; margin: 0 0 18px; font-size: 13.5px; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font: 12.5px var(--mono); padding: 1px 7px; border-radius: 5px; border: 1px solid var(--rule); }
+ul.next { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+ul.next li { font-family: var(--mono); font-size: 13px; }
+ul.next .on { display: inline-block; min-width: 5ch; font-weight: 600; }
+ul.next .arrow { color: var(--muted); margin: 0 6px; }
+ul.next .policy { color: var(--muted); font-family: var(--sans); font-size: 12.5px; margin-left: 8px; }
+.io { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 0 0 18px; }
+.io h3, .prose-head { font-size: 12.5px; font-weight: 600; color: var(--muted); margin: 0 0 6px; }
+pre { margin: 0; padding: 10px 12px; background: var(--sunken); border: 1px solid var(--rule); border-radius: 8px; font-size: 12.5px; line-height: 1.5; overflow-x: auto; }
+
+.prose { border-left: 2px solid var(--rule); padding-left: 16px; max-width: 72ch; }
+.prose.system { margin-bottom: 18px; border-left-color: var(--accent-soft); }
+.prose > :first-child { margin-top: 0; }
+.prose > :last-child { margin-bottom: 0; }
+.prose h1 { font-size: 17px; margin: 0 0 8px; }
+.prose h2 { font-size: 15.5px; margin: 18px 0 6px; }
+.prose h3 { font-size: 14.5px; margin: 16px 0 6px; }
+.prose p, .prose ul, .prose ol { margin: 0 0 10px; }
+.prose code { font-size: .9em; background: var(--sunken); border: 1px solid var(--rule); border-radius: 4px; padding: 0 4px; }
+.prose pre code { background: none; border: 0; padding: 0; }
+.prose table { border-collapse: collapse; font-size: 13.5px; }
+.prose th, .prose td { border: 1px solid var(--rule); padding: 4px 8px; text-align: left; }
+
+table.servers { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; overflow: hidden; font-size: 13.5px; }
+table.servers th { text-align: left; font-weight: 600; color: var(--muted); padding: 10px 14px; border-bottom: 1px solid var(--rule); background: var(--sunken); }
+table.servers td { padding: 10px 14px; border-top: 1px solid var(--rule); vertical-align: top; overflow-wrap: anywhere; }
+table.servers tr:first-child td { border-top: 0; }
+table.servers td:first-child { font-family: var(--mono); font-weight: 600; }
+.servers-wrap { overflow-x: auto; }
+
+details.source > summary { cursor: pointer; color: var(--accent); font-size: 14px; font-weight: 500; }
+details.source pre { margin-top: 12px; max-height: 70vh; }
+
+footer { color: var(--muted); font-size: 12.5px; text-align: center; padding: 0 16px 32px; }
+
+@media (max-width: 860px) {
+  .bar-inner, header.doc { padding-left: 16px; padding-right: 16px; }
+  .bar .scope-label { display: none; }
+  .layout { grid-template-columns: minmax(0, 1fr); padding: 0 16px 48px; gap: 24px; }
+  aside.graph { position: static; max-height: none; max-width: none; }
+  aside.graph .fsm { margin: 0 auto; }
+  details.task > summary { grid-template-columns: 14px minmax(0, 1fr) auto; padding: 12px 14px; }
+  details.task > summary .brief { grid-column: 2 / -1; }
+  .task-body { padding: 4px 14px 20px 14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; scroll-behavior: auto !important; }
+}
+</style>
+</head>
+<body>
+
+
+<header class="doc">
+  <div class="title">
+    
+    <h1>feat-dev-small</h1>
+    <span class="ver">0.3.0</span>
+    <span class="pill">Draft</span>
+  </div>
+  <p class="summary">Take an approved plan and run it to a reviewed diff in an isolated worktree, then tear down.</p>
+  
+  <dl class="meta">
+    <div><dt>Default model</dt><dd><code>anthropic/claude-sonnet-5</code></dd></div>
+    
+    <div><dt>License</dt><dd>Apache-2.0</dd></div>
+    <div><dt>External version</dt><dd>7c1e4b2a-9d3f-4e6a-b8c0-2f5d1a9e3b47</dd></div>
+    <div><dt>Authors</dt><dd>OpenAWF</dd></div>
+    <div><dt>Tags</dt><dd class="chips"><span class="tag">development</span><span class="tag">review</span></dd></div>
+  </dl>
+  
+  
+</header>
+
+<div class="layout">
+  
+  <aside class="graph" aria-label="Orchestration">
+    <div class="legend">
+      <span><svg width="10" height="10" aria-hidden="true"><circle cx="5" cy="5" r="4" fill="currentColor"/></svg>start</span>
+      <span><svg width="16" height="12" aria-hidden="true"><rect x=".5" y=".5" width="15" height="11" rx="3" fill="none" stroke="currentColor"/><rect x="3" y="3" width="10" height="6" rx="1.5" fill="none" stroke="currentColor"/></svg>terminal</span>
+    </div>
+    <svg class="fsm" viewBox="0 0 336 724" width="336" height="724" role="img" aria-label="State machine of feat-dev-small"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" class="arrowhead"/></marker></defs><circle class="entry" cx="94.5" cy="20.0" r="5"/><path class="edge" d="M94.5,25.0 V53.0" marker-end="url(#arrow)"/><path class="edge" data-from="worktree-setup" data-to="setup-stack" d="M94.5,92.0 C94.5,123.5 94.5,123.5 94.5,155.0" marker-end="url(#arrow)"/><path class="edge" data-from="setup-stack" data-to="create-diff" d="M94.5,194.0 C94.5,225.5 94.5,225.5 94.5,257.0" marker-end="url(#arrow)"/><path class="edge" data-from="create-diff" data-to="testing" d="M94.5,296.0 C94.5,327.5 94.5,327.5 94.5,359.0" marker-end="url(#arrow)"/><path class="edge" data-from="testing" data-to="create-diff" d="M158.5,384.0 H183.0 Q191.0,384.0 191.0,376.0 V280.0 Q191.0,272.0 183.0,272.0 H159.5" marker-end="url(#arrow)"/><path class="edge" data-from="testing" data-to="agentic-review" d="M94.5,398.0 C94.5,429.5 94.5,429.5 94.5,461.0" marker-end="url(#arrow)"/><path class="edge" data-from="agentic-review" data-to="teardown-stack" d="M94.5,500.0 C94.5,531.5 94.5,531.5 94.5,563.0" marker-end="url(#arrow)"/><path class="edge" data-from="teardown-stack" data-to="remove-worktree" d="M94.5,602.0 C94.5,633.5 94.5,633.5 94.5,665.0" marker-end="url(#arrow)"/><a class="node" href="#task-agentic-review" data-task="agentic-review"><title>agentic-review</title><rect class="box" x="23.9" y="462.0" width="141.2" height="38" rx="7"/><text x="94.5" y="485.5">agentic-review</text></a><a class="node" href="#task-create-diff" data-task="create-diff"><title>create-diff</title><rect class="box" x="30.5" y="258.0" width="128.0" height="38" rx="7"/><text x="94.5" y="281.5">create-diff</text></a><a class="node terminal" href="#task-remove-worktree" data-task="remove-worktree"><title>remove-worktree</title><rect class="box" x="20.0" y="666.0" width="149.0" height="38" rx="7"/><rect class="inner" x="23.5" y="669.5" width="142.0" height="31" rx="4"/><text x="94.5" y="689.5">remove-worktree</text></a><a class="node" href="#task-setup-stack" data-task="setup-stack"><title>setup-stack</title><rect class="box" x="30.5" y="156.0" width="128.0" height="38" rx="7"/><text x="94.5" y="179.5">setup-stack</text></a><a class="node" href="#task-teardown-stack" data-task="teardown-stack"><title>teardown-stack</title><rect class="box" x="23.9" y="564.0" width="141.2" height="38" rx="7"/><text x="94.5" y="587.5">teardown-stack</text></a><a class="node" href="#task-testing" data-task="testing"><title>testing</title><rect class="box" x="30.5" y="360.0" width="128.0" height="38" rx="7"/><text x="94.5" y="383.5">testing</text></a><a class="node start" href="#task-worktree-setup" data-task="worktree-setup"><title>worktree-setup</title><rect class="box" x="23.9" y="54.0" width="141.2" height="38" rx="7"/><text x="94.5" y="77.5">worktree-setup</text></a><text class="label" x="197.0" y="352.0" text-anchor="start"><tspan class="outcome" x="197.0">fail</tspan><tspan class="policy" x="197.0" dy="14">2 retries, resume</tspan></text><text class="label" x="101.5" y="433.5" text-anchor="start"><tspan class="outcome" x="101.5">pass</tspan></text><text class="label" x="101.5" y="535.5" text-anchor="start"><tspan class="outcome" x="101.5">pass</tspan></text></svg>
+  </aside>
+  
+
+  <main>
+    
+    <section>
+      <div class="section-head">
+        <h2>Tasks<span class="count">7</span></h2>
+        <button class="toggle" type="button" data-collapse>Collapse all</button>
+      </div>
+      <div class="tasks">
+        
+        <details class="task" id="task-worktree-setup" data-task="worktree-setup" open>
+          <summary>
+            <span class="name">worktree-setup<span class="v">2.2.1</span></span>
+            <span class="brief">Create an isolated git worktree for this task.</span>
+            <span class="tags">
+              <span class="tag start">start</span>
+              
+              
+            </span>
+          </summary>
+          <div class="task-body">
+            <dl class="facts">
+              <dt>Model</dt><dd><code>anthropic/claude-sonnet-5</code></dd>
+              
+              
+              
+              
+              <dt>Next</dt>
+              <dd>
+                
+                <ul class="next">
+                  
+                  <li><a href="#task-setup-stack">setup-stack</a></li>
+                  
+                </ul>
+                
+              </dd>
+              
+              
+              
+              
+              
+              
+            </dl>
+            
+            <div class="io">
+              <div><h3>Input</h3><pre><code>properties:
+  plan:
+    type: string
+required:
+  - plan
+type: object</code></pre></div>
+              
+              
+            </div>
+            
+            
+            <div class="prose"><h1>Worktree Setup</h1>
+<p>Create a dedicated git worktree for this task, isolated from the main
+checkout and any other in-flight work. Return the worktree path and the
+plan unchanged so the following tasks can act on it.</p>
+</div>
+          </div>
+        </details>
+        
+        <details class="task" id="task-setup-stack" data-task="setup-stack" open>
+          <summary>
+            <span class="name">setup-stack<span class="v">1.4.0</span></span>
+            <span class="brief">Bring up a local stack scoped to this worktree.</span>
+            <span class="tags">
+              
+              
+              
+            </span>
+          </summary>
+          <div class="task-body">
+            <dl class="facts">
+              <dt>Model</dt><dd><code>anthropic/claude-sonnet-5</code></dd>
+              
+              
+              
+              
+              <dt>Next</dt>
+              <dd>
+                
+                <ul class="next">
+                  
+                  <li><a href="#task-create-diff">create-diff</a></li>
+                  
+                </ul>
+                
+              </dd>
+              
+              
+              
+              
+              
+              
+            </dl>
+            
+            
+            <div class="prose"><h1>Setup Stack</h1>
+<p>Bring up a full local stack scoped entirely to this worktree through the
+setup-stack port. The stack is self-contained and shares nothing with
+other environments. If it fails it can be retried without recreating the
+worktree. Return the stack details and the plan.</p>
+</div>
+          </div>
+        </details>
+        
+        <details class="task" id="task-create-diff" data-task="create-diff" open>
+          <summary>
+            <span class="name">create-diff<span class="v">3.0.1</span></span>
+            <span class="brief">Implement the plan against the worktree as a committed diff.</span>
+            <span class="tags">
+              
+              
+              
+            </span>
+          </summary>
+          <div class="task-body">
+            <dl class="facts">
+              <dt>Model</dt><dd><code>anthropic/claude-sonnet-5</code></dd>
+              
+              
+              
+              
+              <dt>Next</dt>
+              <dd>
+                
+                <ul class="next">
+                  
+                  <li><a href="#task-testing">testing</a></li>
+                  
+                </ul>
+                
+              </dd>
+              
+              
+              
+              
+              
+              
+            </dl>
+            
+            
+            <div class="prose"><h1>Create Diff</h1>
+<p>Implement the approved plan against the isolated worktree, producing the
+change as a diff committed to the task's branch. If this task received
+test failures as input, correct the diff to address them. Return the diff.</p>
+</div>
+          </div>
+        </details>
+        
+        <details class="task" id="task-testing" data-task="testing" open>
+          <summary>
+            <span class="name">testing<span class="v">2.1.0</span></span>
+            <span class="brief">Run compile, unit, integration, and e2e checks on the diff.</span>
+            <span class="tags">
+              
+              
+              
+            </span>
+          </summary>
+          <div class="task-body">
+            <dl class="facts">
+              <dt>Model</dt><dd><code>anthropic/claude-sonnet-5</code></dd>
+              
+              
+              
+              
+              <dt>Next</dt>
+              <dd>
+                
+                <ul class="next">
+                  
+                  <li><span class="on">fail</span><span class="arrow">→</span><a href="#task-create-diff">create-diff</a><span class="policy">2 retries, resumes the session</span></li>
+                  
+                  <li><span class="on">pass</span><span class="arrow">→</span><a href="#task-agentic-review">agentic-review</a></li>
+                  
+                </ul>
+                
+              </dd>
+              
+              
+              
+              
+              
+              
+            </dl>
+            
+            <div class="io">
+              
+              <div><h3>Outcome <code>pass</code></h3><pre><code>properties:
+  diff:
+    type: string
+required:
+  - diff
+type: object</code></pre></div><div><h3>Outcome <code>fail</code></h3><pre><code>properties:
+  errors:
+    items:
+      type: string
+    type: array
+required:
+  - errors
+type: object</code></pre></div>
+              
+            </div>
+            
+            
+            <div class="prose"><h1>Testing</h1>
+<p>Validate the diff through four checks in order: compile, unit tests,
+integration tests, e2e tests. If any check fails, emit <code>fail</code> and return
+the failures so the diff can be corrected. Only if all four pass, emit
+<code>pass</code> and return the diff.</p>
+</div>
+          </div>
+        </details>
+        
+        <details class="task" id="task-agentic-review" data-task="agentic-review" open>
+          <summary>
+            <span class="name">agentic-review<span class="v">1.2.3</span></span>
+            <span class="brief">Review the passing diff for correctness and quality.</span>
+            <span class="tags">
+              
+              
+              
+            </span>
+          </summary>
+          <div class="task-body">
+            <dl class="facts">
+              <dt>Model chain</dt><dd><ol class="chain"><li>anthropic/claude-opus-5-5</li><li>anthropic/claude-sonnet-5</li></ol></dd>
+              
+              
+              
+              
+              <dt>Next</dt>
+              <dd>
+                
+                <ul class="next">
+                  
+                  <li><span class="on">pass</span><span class="arrow">→</span><a href="#task-teardown-stack">teardown-stack</a></li>
+                  
+                </ul>
+                
+              </dd>
+              
+              
+              
+              
+              
+              
+            </dl>
+            
+            <div class="io">
+              
+              <div><h3>Outcome <code>pass</code></h3><pre><code>properties:
+  diff:
+    type: string
+required:
+  - diff
+type: object</code></pre></div>
+              
+            </div>
+            
+            <h3 class="prose-head">System</h3><div class="prose system"><p>You are a senior reviewer. Judge the diff against the plan, not your
+own preferences. Never edit the diff yourself.</p>
+</div>
+            <h3 class="prose-head">Body</h3><div class="prose"><h1>Agentic Review</h1>
+<p>Review the diff for correctness, quality, and adherence to the plan.
+Catch design problems, missed requirements, and risky changes that the
+tests do not. Emit <code>pass</code> and return the diff.</p>
+</div>
+          </div>
+        </details>
+        
+        <details class="task" id="task-teardown-stack" data-task="teardown-stack" open>
+          <summary>
+            <span class="name">teardown-stack<span class="v">1.4.0</span></span>
+            <span class="brief">Tear down the stack brought up for this worktree.</span>
+            <span class="tags">
+              
+              
+              
+            </span>
+          </summary>
+          <div class="task-body">
+            <dl class="facts">
+              <dt>Model</dt><dd><code>anthropic/claude-sonnet-5</code></dd>
+              
+              
+              
+              
+              <dt>Next</dt>
+              <dd>
+                
+                <ul class="next">
+                  
+                  <li><a href="#task-remove-worktree">remove-worktree</a></li>
+                  
+                </ul>
+                
+              </dd>
+              
+              
+              
+              
+              
+              
+            </dl>
+            
+            
+            <div class="prose"><h1>Teardown Stack</h1>
+<p>Tear down the stack through the teardown-stack port: stop its processes,
+drop its database, and remove its generated config. Return confirmation.</p>
+</div>
+          </div>
+        </details>
+        
+        <details class="task" id="task-remove-worktree" data-task="remove-worktree" open>
+          <summary>
+            <span class="name">remove-worktree<span class="v">2.0.0</span></span>
+            <span class="brief">Remove the git worktree, leaving the branch intact.</span>
+            <span class="tags">
+              
+              
+              
+            </span>
+          </summary>
+          <div class="task-body">
+            <dl class="facts">
+              <dt>Model</dt><dd><code>anthropic/claude-sonnet-5</code></dd>
+              
+              
+              
+              
+              <dt>Next</dt>
+              <dd>
+                <span class="tag end">terminal</span>
+              </dd>
+              
+              
+              
+              
+              
+              
+            </dl>
+            
+            
+            <div class="prose"><h1>Remove Worktree</h1>
+<p>Remove the git worktree. This deletes the working checkout only; the
+branch and its committed diff remain in the repository. Return confirmation.</p>
+</div>
+          </div>
+        </details>
+        
+      </div>
+    </section>
+    
+
+    
+
+    <section>
+      <details class="source">
+        <summary>Show source</summary>
+        <pre><code># examples/0.1.0/feat-dev-small.yaml from the spec, with its placeholder shas
+# set to null so the document validates.
+openawf: 0.1.0
+name: feat-dev-small
+summary: Take an approved plan and run it to a reviewed diff in an isolated worktree, then tear down.
+model: anthropic/claude-sonnet-5
+metadata:
+  tags: [development, review]
+  authors: [OpenAWF]
+license: Apache-2.0
+version: 0.3.0
+external-version: 7c1e4b2a-9d3f-4e6a-b8c0-2f5d1a9e3b47
+sha: null
+
+start: worktree-setup
+orchestration:
+  worktree-setup: setup-stack
+  setup-stack: create-diff
+  create-diff: testing
+  testing:
+    pass: agentic-review
+    fail:
+      task: create-diff
+      retries: 2
+      session: resume
+  agentic-review:
+    pass: teardown-stack
+  teardown-stack: remove-worktree
+  remove-worktree: null
+
+tasks:
+  worktree-setup:
+    version: 2.2.1
+    sha: null
+    summary: Create an isolated git worktree for this task.
+    input:
+      type: object
+      properties:
+        plan:
+          type: string
+      required: [plan]
+    body: |
+      # Worktree Setup
+
+      Create a dedicated git worktree for this task, isolated from the main
+      checkout and any other in-flight work. Return the worktree path and the
+      plan unchanged so the following tasks can act on it.
+
+  setup-stack:
+    version: 1.4.0
+    sha: null
+    summary: Bring up a local stack scoped to this worktree.
+    body: |
+      # Setup Stack
+
+      Bring up a full local stack scoped entirely to this worktree through the
+      setup-stack port. The stack is self-contained and shares nothing with
+      other environments. If it fails it can be retried without recreating the
+      worktree. Return the stack details and the plan.
+
+  create-diff:
+    version: 3.0.1
+    sha: null
+    summary: Implement the plan against the worktree as a committed diff.
+    body: |
+      # Create Diff
+
+      Implement the approved plan against the isolated worktree, producing the
+      change as a diff committed to the task&#39;s branch. If this task received
+      test failures as input, correct the diff to address them. Return the diff.
+
+  testing:
+    version: 2.1.0
+    sha: null
+    summary: Run compile, unit, integration, and e2e checks on the diff.
+    outcomes:
+      pass:
+        type: object
+        properties:
+          diff: { type: string }
+        required: [diff]
+      fail:
+        type: object
+        properties:
+          errors: { type: array, items: { type: string } }
+        required: [errors]
+    body: |
+      # Testing
+
+      Validate the diff through four checks in order: compile, unit tests,
+      integration tests, e2e tests. If any check fails, emit `fail` and return
+      the failures so the diff can be corrected. Only if all four pass, emit
+      `pass` and return the diff.
+
+  agentic-review:
+    version: 1.2.3
+    sha: null
+    summary: Review the passing diff for correctness and quality.
+    model: [anthropic/claude-opus-5-5, anthropic/claude-sonnet-5]
+    system: |
+      You are a senior reviewer. Judge the diff against the plan, not your
+      own preferences. Never edit the diff yourself.
+    outcomes:
+      pass:
+        type: object
+        properties:
+          diff: { type: string }
+        required: [diff]
+    body: |
+      # Agentic Review
+
+      Review the diff for correctness, quality, and adherence to the plan.
+      Catch design problems, missed requirements, and risky changes that the
+      tests do not. Emit `pass` and return the diff.
+
+  teardown-stack:
+    version: 1.4.0
+    sha: null
+    summary: Tear down the stack brought up for this worktree.
+    body: |
+      # Teardown Stack
+
+      Tear down the stack through the teardown-stack port: stop its processes,
+      drop its database, and remove its generated config. Return confirmation.
+
+  remove-worktree:
+    version: 2.0.0
+    sha: null
+    summary: Remove the git worktree, leaving the branch intact.
+    body: |
+      # Remove Worktree
+
+      Remove the git worktree. This deletes the working checkout only; the
+      branch and its committed diff remain in the repository. Return confirmation.
+
+</code></pre>
+      </details>
+    </section>
+  </main>
+</div>
+
+<footer>Rendered by awf golden</footer>
+
+
+
+<script>
+(() => {
+  const nodes = new Map([...document.querySelectorAll('.fsm .node')].map(n => [n.dataset.task, n]));
+  const edges = [...document.querySelectorAll('.fsm .edge[data-from]')];
+  const tasks = [...document.querySelectorAll('details.task')];
+  let pinned = null;
+
+  const focus = name => {
+    tasks.forEach(t => t.classList.toggle('current', t.dataset.task === name));
+    nodes.forEach((n, key) => n.classList.toggle('current', key === name));
+    edges.forEach(e => e.classList.toggle('lit', e.dataset.from === name));
+    follow(nodes.get(name));
+  };
+
+  
+  const panel = document.querySelector('aside.graph');
+  let last = null;
+  function follow(node) {
+    if (!node || !panel || node === last) return;
+    last = node;
+    if (panel.scrollHeight <= panel.clientHeight) return;
+    const box = node.getBoundingClientRect(), view = panel.getBoundingClientRect();
+    const margin = 48;
+    if (box.top >= view.top + margin && box.bottom <= view.bottom - margin) return;
+    const top = panel.scrollTop + box.top - view.top - (panel.clientHeight - box.height) / 2;
+    panel.scrollTo({ top, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  }
+
+  nodes.forEach((n, name) => n.addEventListener('click', ev => {
+    ev.preventDefault();
+    const t = document.getElementById('task-' + name);
+    if (!t) return;
+    t.open = true;
+    history.replaceState(null, '', '#task-' + name);
+    t.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+    pinned = name;
+    focus(name);
+  }));
+
+  
+  
+  
+  const spy = () => {
+    if (pinned) return;
+    let current = tasks[0];
+    for (const t of tasks) if (t.getBoundingClientRect().top <= 96) current = t;
+    if (current) focus(current.dataset.task);
+  };
+  if (nodes.size) {
+    let queued = false;
+    addEventListener('scroll', () => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => { queued = false; spy(); });
+    }, { passive: true });
+    ['wheel', 'touchstart', 'keydown'].forEach(type => addEventListener(type, () => { pinned = null; }, { passive: true }));
+    spy();
+  }
+
+  const menus = [...document.querySelectorAll('details.menu')];
+  menus.forEach(m => m.addEventListener('toggle', () => {
+    if (m.open) menus.forEach(o => { if (o !== m) o.open = false; });
+  }));
+  document.addEventListener('click', ev => menus.forEach(m => { if (!m.contains(ev.target)) m.open = false; }));
+  document.addEventListener('keydown', ev => {
+    if (ev.key !== 'Escape') return;
+    menus.filter(m => m.open).forEach(m => { m.open = false; m.querySelector('summary').focus(); });
+  });
+
+  const overlay = document.querySelector('[data-overlay]');
+  if (overlay) {
+    const close = () => { overlay.hidden = true; };
+    overlay.querySelector('[data-overlay-close]').addEventListener('click', close);
+    overlay.addEventListener('click', ev => { if (ev.target === overlay) close(); });
+    document.addEventListener('keydown', ev => { if (ev.key === 'Escape') close(); });
+    document.querySelector('[data-overlay-open]').addEventListener('click', () => { overlay.hidden = false; });
+  }
+
+  const toggle = document.querySelector('[data-collapse]');
+  if (toggle) toggle.addEventListener('click', () => {
+    const open = tasks.some(t => t.open);
+    tasks.forEach(t => { t.open = !open; });
+    toggle.textContent = open ? 'Expand all' : 'Collapse all';
+  });
+
+  if (location.hash.startsWith('#task-')) {
+    pinned = decodeURIComponent(location.hash.slice(6));
+    focus(pinned);
+  }
+})();
+</script>
+
+</body>
+</html>
+

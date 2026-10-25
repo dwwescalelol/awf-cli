@@ -4,15 +4,16 @@ version: 0.1.0
 summary: Produce a diff for the branch.
 input:
   branch: string
-output:
-  diff: string
-model: opus
+model: anthropic/claude-opus-5
 outcomes:
-  - ok
-  - fail
+  ok:
+    type: object
+  fail:
+    type: object
 uses:
   - fs
   - gh
+system: You write diffs.
 sha: null
 ---
 

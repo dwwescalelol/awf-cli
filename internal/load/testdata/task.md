@@ -5,15 +5,18 @@ sha: null
 summary: Produce a diff for the branch.
 input:
   branch: string
-output:
-  diff: string
-model: opus
+model: anthropic/claude-opus-5
 outcomes:
-  - ok
-  - fail
+  ok:
+    type: object
+  fail:
+    type: object
+system: You write diffs.
 uses:
   - fs
   - gh
+x-runner:
+  mode: plan
 ---
 
 # create-diff

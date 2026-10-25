@@ -14,8 +14,13 @@ tasks:
     body: plan
   review:
     outcomes:
-      - ok
-      - fail
+      ok:
+        type: object
+      fail:
+        type: object
+        properties:
+          reason:
+            type: string
     uses:
       - gh
     body: review
@@ -23,4 +28,5 @@ tasks:
     body: ship
 mcp:
   gh:
-    transport: http
+    type: http
+    url: https://example.com/mcp

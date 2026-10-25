@@ -24,6 +24,12 @@ func TestTaskRoundTrip(t *testing.T) {
 	if task.SHA != nil {
 		t.Errorf("sha: got %q, want null", *task.SHA)
 	}
+	if names := task.Outcomes.Names(); len(names) != 2 || names[0] != "ok" || names[1] != "fail" {
+		t.Errorf("outcomes: got %q, want ok then fail", names)
+	}
+	if task.Rest["system"] != "You write diffs." {
+		t.Errorf("rest: got %+v, want system kept", task.Rest)
+	}
 	if want := "# create-diff\n\nDescribe the work this task performs, and what it returns.\n"; string(task.Body) != want {
 		t.Errorf("body: got %q, want %q", task.Body, want)
 	}
@@ -58,14 +64,33 @@ func TestWorkflowRoundTrip(t *testing.T) {
 	if task := wf.Tasks["plan"].Task; task == nil || task.Body != "# plan\n" {
 		t.Errorf("plan task: got %+v", task)
 	}
-	if tools := wf.MCP["fs"].Tools; tools == nil || !tools.All {
-		t.Errorf("fs tools: got %+v, want all", tools)
+	review := wf.Tasks["review"].Task
+	if names := review.Outcomes.Names(); len(names) != 2 || names[0] != "ok" || names[1] != "fail" {
+		t.Errorf("review outcomes: got %q, want ok then fail", names)
 	}
-	if tools := wf.MCP["gh"].Tools; tools == nil || tools.All || len(tools.Names) != 2 {
-		t.Errorf("gh tools: got %+v, want two names", tools)
+	if fail := review.Outcomes[1].Schema; fail["type"] != "object" || fail["properties"] == nil {
+		t.Errorf("fail schema: got %+v", fail)
 	}
-	if tools := wf.MCP["none"].Tools; tools == nil || tools.All || len(tools.Names) != 0 {
-		t.Errorf("none tools: got %+v, want none", tools)
+	if len(review.Model) != 2 || review.Model[0] != "anthropic/claude-sonnet-5" {
+		t.Errorf("review model: got %q, want a fallback chain", review.Model)
+	}
+	if _, ok := review.Rest["body"]; ok || review.Rest["effort"] != "high" {
+		t.Errorf("review rest: got %+v, want effort and max-turns only", review.Rest)
+	}
+	if e := wf.Orchestration["review"].Branch["fail"]; e.Rest["x-runner"] == nil {
+		t.Errorf("fail edge: got %+v, want x-runner kept", e)
+	}
+	if fs := wf.MCP["fs"]; fs.Type != "stdio" || fs.Allow == nil || !fs.Allow.All || fs.Rest["command"] != "mcp-fs" {
+		t.Errorf("fs: got %+v, want stdio allowing all tools", fs)
+	}
+	if allow := wf.MCP["gh"].Allow; allow == nil || allow.All || len(allow.Names) != 2 {
+		t.Errorf("gh allow: got %+v, want two names", allow)
+	}
+	if none := wf.MCP["none"]; none.Allow != nil || len(none.Deny) != 1 {
+		t.Errorf("none: got %+v, want one denied tool", none)
+	}
+	if wf.Rest["license"] != "Apache-2.0" || wf.Rest["x-runner"] == nil {
+		t.Errorf("rest: got %+v, want license and x-runner kept", wf.Rest)
 	}
 
 	got, err := Marshal(wf)

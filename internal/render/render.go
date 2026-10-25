@@ -151,13 +151,13 @@ func Workflow(out io.Writer, path string, source []byte, doc *manifest.Workflow,
 		t.Terminal = s.IsTerminal()
 		t.Unreachable = unreachable[s]
 		for _, e := range s.Out {
-			t.Next = append(t.Next, Edge{On: string(e.On), To: e.To.Task.Name, Retries: e.Retries, Resume: e.Session == awf.Resume})
+			t.Next = append(t.Next, Edge{On: e.On, To: e.To.Task.Name, Retries: e.Retries, Resume: e.Session == awf.Resume})
 		}
 		p.Tasks = append(p.Tasks, t)
 	}
 
 	for _, srv := range w.Servers {
-		s := Server{Name: srv.Name, Transport: string(srv.Transport), Tools: tools(srv.Tools)}
+		s := Server{Name: srv.Name, Transport: string(srv.Transport), Tools: tools(srv.Allow)}
 		for _, st := range w.States {
 			if slices.Contains(st.Task.Uses, srv) {
 				s.UsedBy = append(s.UsedBy, st.Task.Name)
@@ -172,13 +172,13 @@ func Workflow(out io.Writer, path string, source []byte, doc *manifest.Workflow,
 func Task(out io.Writer, path, name string, source []byte, doc *manifest.Task) error {
 	outcomes := make([]awf.Outcome, 0, len(doc.Outcomes))
 	for _, o := range doc.Outcomes {
-		outcomes = append(outcomes, awf.Outcome(o))
+		outcomes = append(outcomes, awf.Outcome{Name: o.Name, Schema: o.Schema})
 	}
 	t, err := task(&awf.Task{
 		Name:     name,
 		Version:  doc.Version,
 		Summary:  doc.Summary,
-		Model:    doc.Model,
+		Model:    doc.Model.String(),
 		Input:    doc.Input,
 		Output:   doc.Output,
 		Outcomes: outcomes,
@@ -278,7 +278,7 @@ func task(t *awf.Task, doc *manifest.Task) (TaskView, error) {
 		out.SHA = sha(doc.SHA)
 	}
 	for _, o := range t.Outcomes {
-		out.Outcomes = append(out.Outcomes, string(o))
+		out.Outcomes = append(out.Outcomes, o.Name)
 	}
 	for _, u := range t.Uses {
 		out.Uses = append(out.Uses, u.Name)

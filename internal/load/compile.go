@@ -50,7 +50,7 @@ func compile(doc *manifest.Workflow) (*awf.Workflow, []error) {
 	w := &awf.Workflow{
 		Name:    doc.Name,
 		Summary: doc.Summary,
-		Model:   doc.Model,
+		Model:   doc.Model.String(),
 		Version: doc.Version,
 		Start:   start,
 		States:  ordered(states),
@@ -79,15 +79,15 @@ func states(doc *manifest.Workflow, servers map[string]*awf.MCPServer) (map[stri
 			out[name] = &awf.State{Task: &awf.Task{Name: name}}
 			continue
 		}
-		t, e := task(name, entry.Task, doc.Model, servers)
+		t, e := task(name, entry.Task, doc.Model.String(), servers)
 		out[name], errs = &awf.State{Task: t}, append(errs, e...)
 	}
 	return out, errs
 }
 
 func task(name string, doc *manifest.Task, model string, servers map[string]*awf.MCPServer) (*awf.Task, []error) {
-	if doc.Model != "" {
-		model = doc.Model
+	if len(doc.Model) > 0 {
+		model = doc.Model.String()
 	}
 
 	var errs []error
@@ -103,7 +103,7 @@ func task(name string, doc *manifest.Task, model string, servers map[string]*awf
 
 	outcomes := make([]awf.Outcome, 0, len(doc.Outcomes))
 	for _, outcome := range doc.Outcomes {
-		outcomes = append(outcomes, awf.Outcome(outcome))
+		outcomes = append(outcomes, awf.Outcome{Name: outcome.Name, Schema: outcome.Schema})
 	}
 
 	return &awf.Task{
@@ -125,7 +125,7 @@ func task(name string, doc *manifest.Task, model string, servers map[string]*awf
 // bind.
 func edges(name string, node manifest.Transition, states map[string]*awf.State, unresolved bool) ([]awf.Edge, []error) {
 	path := "orchestration/" + name
-	outcomes := states[name].Task.Outcomes
+	outcomes := names(states[name].Task.Outcomes)
 
 	switch {
 	case unresolved:
@@ -152,16 +152,16 @@ func edges(name string, node manifest.Transition, states map[string]*awf.State, 
 	var errs []error
 	out := make([]awf.Edge, 0, len(node.Branch))
 	for _, on := range sorted(node.Branch) {
-		if !slices.Contains(outcomes, awf.Outcome(on)) {
+		if !slices.Contains(outcomes, on) {
 			errs = append(errs, onKey(path+"/"+on, fmt.Errorf("%s/%s: %w of %q", path, on, ErrNotAnOutcome, name)))
 			continue
 		}
-		e, err := edge(path+"/"+on, awf.Outcome(on), node.Branch[on], states)
+		e, err := edge(path+"/"+on, on, node.Branch[on], states)
 		out, errs = append(out, e), append(errs, err...)
 	}
 	for _, on := range outcomes {
-		if _, ok := node.Branch[string(on)]; !ok {
-			errs = append(errs, onKey(path+"/"+string(on), fmt.Errorf("%s/%s: %w", path, on, ErrNoEdge)))
+		if _, ok := node.Branch[on]; !ok {
+			errs = append(errs, onKey(path+"/"+on, fmt.Errorf("%s/%s: %w", path, on, ErrNoEdge)))
 		}
 	}
 	return out, errs
@@ -175,13 +175,13 @@ func targets(path string, node manifest.Transition, states map[string]*awf.State
 	var errs []error
 	out := make([]awf.Edge, 0, len(node.Branch))
 	for _, on := range sorted(node.Branch) {
-		e, err := edge(path+"/"+on, awf.Outcome(on), node.Branch[on], states)
+		e, err := edge(path+"/"+on, on, node.Branch[on], states)
 		out, errs = append(out, e), append(errs, err...)
 	}
 	return out, errs
 }
 
-func edge(path string, on awf.Outcome, doc manifest.Edge, states map[string]*awf.State) (awf.Edge, []error) {
+func edge(path string, on string, doc manifest.Edge, states map[string]*awf.State) (awf.Edge, []error) {
 	to, ok := states[doc.Task]
 	if !ok {
 		return awf.Edge{}, []error{onValue(path, fmt.Errorf("%s %q: %w", path, doc.Task, ErrNotATask))}
@@ -196,11 +196,19 @@ func edge(path string, on awf.Outcome, doc manifest.Edge, states map[string]*awf
 func servers(docs map[string]manifest.MCPServer) map[string]*awf.MCPServer {
 	out := make(map[string]*awf.MCPServer, len(docs))
 	for name, doc := range docs {
-		tools := awf.Tools{All: true}
-		if doc.Tools != nil {
-			tools = awf.Tools{All: doc.Tools.All, Names: doc.Tools.Names}
+		allow := awf.Tools{All: true}
+		if doc.Allow != nil {
+			allow = awf.Tools{All: doc.Allow.All, Names: doc.Allow.Names}
 		}
-		out[name] = &awf.MCPServer{Name: name, Transport: awf.Transport(doc.Transport), Tools: tools}
+		out[name] = &awf.MCPServer{Name: name, Transport: awf.Transport(doc.Type), Allow: allow, Deny: doc.Deny}
+	}
+	return out
+}
+
+func names(outcomes []awf.Outcome) []string {
+	out := make([]string, len(outcomes))
+	for i, o := range outcomes {
+		out[i] = o.Name
 	}
 	return out
 }

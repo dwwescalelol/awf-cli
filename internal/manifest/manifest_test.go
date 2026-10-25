@@ -109,14 +109,31 @@ func TestWorkflowRoundTrip(t *testing.T) {
 	if _, ok := fail.Extensions.Value("x-runner"); !ok {
 		t.Errorf("fail edge: got %+v, want x-runner kept", fail)
 	}
-	if fs := wf.MCP["fs"]; fs.Type != "stdio" || fs.Allow == nil || !fs.Allow.All || fs.Rest["command"] != "mcp-fs" {
+	if fs := wf.MCP["fs"]; fs.Type != "stdio" || fs.Allow == nil || !fs.Allow.All || fs.Command != "mcp-fs" {
 		t.Errorf("fs: got %+v, want stdio allowing all tools", fs)
 	}
-	if fs := wf.MCP["fs"]; fs.Rest["x-runner"] != nil || len(fs.Extensions) != 1 {
+	if fs := wf.MCP["fs"]; len(fs.Extensions) != 1 {
 		t.Errorf("fs extensions: got %+v, want x-runner as an extension only", fs)
 	}
 	if allow := wf.MCP["gh"].Allow; allow == nil || allow.All || len(allow.Names) != 2 {
 		t.Errorf("gh allow: got %+v, want two names", allow)
+	}
+	gh := wf.MCP["gh"]
+	if gh.URL != "https://example.com/mcp" || gh.Timeout != 60000 || len(gh.Headers) != 2 || gh.Headers[0].Key != "X-Trace" {
+		t.Errorf("gh: got %+v, want url, timeout and headers in written order", gh)
+	}
+	if o := gh.OAuth; o == nil || o.ClientID != "awf" || !slices.Equal(o.Scopes, []string{"repo"}) || o.CallbackPort != 8080 || o.MetadataURL == "" {
+		t.Errorf("gh oauth: got %+v", o)
+	}
+	pkg := wf.MCP["pkg"]
+	if p := pkg.Package; p == nil || p.RegistryType != "mcpb" || p.Version != "1.2.3" || len(p.FileSHA256) != 64 {
+		t.Errorf("pkg package: got %+v", p)
+	}
+	if len(pkg.Env) != 2 || pkg.Env[0].Key != "ZED" || !slices.Equal(pkg.Args, []string{"${REPO_DIR}"}) {
+		t.Errorf("pkg: got %+v, want env in written order and args", pkg)
+	}
+	if keys := extensionKeys(pkg.Extensions); !slices.Equal(keys, []string{"x-zed", "x-alpha"}) {
+		t.Errorf("pkg extensions: got %q, want x-zed then x-alpha", keys)
 	}
 	if none := wf.MCP["none"]; none.Allow != nil || len(none.Deny) != 1 {
 		t.Errorf("none: got %+v, want one denied tool", none)

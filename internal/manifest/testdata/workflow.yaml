@@ -71,21 +71,45 @@ tasks:
 mcp:
   fs:
     type: stdio
-    allow: "*"
     command: mcp-fs
+    allow: "*"
     x-runner:
       cwd: /tmp
   gh:
     type: http
+    url: https://example.com/mcp
+    headers:
+      X-Trace: "on"
+      Authorization: Bearer ${GITHUB_TOKEN}
+    oauth:
+      client-id: awf
+      scopes:
+        - repo
+      callback-port: 8080
+      metadata-url: https://example.com/.well-known/oauth-authorization-server
     allow:
       - create_pr
       - list_issues
-    url: https://example.com/mcp
+    timeout: 60000
   none:
     type: stdio
+    command: mcp-none
     deny:
       - delete_file
-    command: mcp-none
+  pkg:
+    type: stdio
+    package:
+      registry-type: mcpb
+      identifier: https://example.com/server.mcpb
+      version: 1.2.3
+      file-sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    args:
+      - ${REPO_DIR}
+    env:
+      ZED: "1"
+      ALPHA: "2"
+    x-zed: 1
+    x-alpha: 2
 x-runner:
   mode: plan
   b: 1

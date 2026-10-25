@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/dwwescalelol/awf-cli/internal/manifest"
+	"github.com/dwwescalelol/awf-cli/internal/version"
 	"github.com/goccy/go-yaml"
 )
 
@@ -29,45 +30,67 @@ var algorithms = map[string]func() hash.Hash{
 	"sha512": sha512.New,
 }
 
+// Workflow returns the sha of a bundled workflow.
 func Workflow(doc *manifest.Workflow) (string, error) {
-	data, err := manifest.Marshal(doc)
-	if err != nil {
-		return "", err
-	}
-	return sum(Algorithm, data)
+	return sumWorkflow(Algorithm, doc)
 }
 
+// Task returns the sha of a task document.
 func Task(doc *manifest.Task) (string, error) {
-	data, err := yaml.Marshal(doc)
-	if err != nil {
-		return "", err
-	}
-	return sum(Algorithm, data)
+	return sumTask(Algorithm, doc)
 }
 
+// CheckWorkflow reports whether a sealed workflow's sha matches its content.
 func CheckWorkflow(doc *manifest.Workflow) error {
 	if doc.SHA == nil {
 		return nil
 	}
-	data, err := manifest.Marshal(doc)
-	if err != nil {
-		return err
-	}
-	return check(*doc.SHA, data)
+	return check(*doc.SHA, func(name string) (string, error) { return sumWorkflow(name, doc) })
 }
 
+// CheckTask reports whether a sealed task document's sha matches its content.
 func CheckTask(doc *manifest.Task) error {
 	if doc.SHA == nil {
 		return nil
 	}
-	data, err := yaml.Marshal(doc)
-	if err != nil {
-		return err
-	}
-	return check(*doc.SHA, data)
+	return check(*doc.SHA, func(name string) (string, error) { return sumTask(name, doc) })
 }
 
-func content(data []byte) ([]byte, error) {
+// CheckInline reports whether a sealed inline task's sha matches its hash as a
+// task document carrying the workflow's openawf. A bundled task's sha is its
+// hash with source removed.
+func CheckInline(openawf version.Version, t *manifest.Task) error {
+	standalone := *t
+	standalone.OpenAWF = openawf
+	err := CheckTask(&standalone)
+	if err != nil && standalone.Source != "" {
+		standalone.Source = ""
+		if CheckTask(&standalone) == nil {
+			return nil
+		}
+	}
+	return err
+}
+
+func sumWorkflow(name string, doc *manifest.Workflow) (string, error) {
+	data, err := manifest.Marshal(doc)
+	if err != nil {
+		return "", err
+	}
+	return sum(name, data, workflowForm)
+}
+
+func sumTask(name string, doc *manifest.Task) (string, error) {
+	data, err := yaml.Marshal(doc)
+	if err != nil {
+		return "", err
+	}
+	return sum(name, data, taskForm)
+}
+
+// content is the canonical form of section 8.2: the document as a JSON value,
+// rewritten by form, serialized with RFC 8785.
+func content(data []byte, form func(any) any) ([]byte, error) {
 	raw, err := yaml.YAMLToJSON(data)
 	if err != nil {
 		return nil, err
@@ -78,16 +101,12 @@ func content(data []byte) ([]byte, error) {
 	if err := d.Decode(&doc); err != nil {
 		return nil, err
 	}
-	if fields, ok := doc.(map[string]any); ok {
-		delete(fields, "sha")
-		delete(fields, "version")
-	}
-	return canonical(doc)
+	return canonical(form(doc))
 }
 
-func check(sha string, data []byte) error {
+func check(sha string, sum func(name string) (string, error)) error {
 	name, _, _ := strings.Cut(sha, "-")
-	got, err := sum(name, data)
+	got, err := sum(name)
 	if err != nil {
 		return err
 	}
@@ -97,12 +116,12 @@ func check(sha string, data []byte) error {
 	return nil
 }
 
-func sum(name string, data []byte) (string, error) {
+func sum(name string, data []byte, form func(any) any) (string, error) {
 	newHash, ok := algorithms[name]
 	if !ok {
 		return "", fmt.Errorf("sha %q: %w", name, ErrAlgorithm)
 	}
-	body, err := content(data)
+	body, err := content(data, form)
 	if err != nil {
 		return "", err
 	}

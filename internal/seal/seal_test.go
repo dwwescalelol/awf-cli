@@ -3,10 +3,13 @@ package seal
 import (
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/dwwescalelol/awf-cli/internal/manifest"
+	"github.com/dwwescalelol/awf-cli/internal/version"
 )
 
 func TestCanonical(t *testing.T) {
@@ -147,5 +150,218 @@ func TestCheck(t *testing.T) {
 	wf.SHA = &unknown
 	if err := CheckWorkflow(wf); !errors.Is(err, ErrAlgorithm) {
 		t.Errorf("md5: got %v, want %v", err, ErrAlgorithm)
+	}
+}
+
+func workflowContent(t *testing.T, doc string) string {
+	t.Helper()
+	wf, err := manifest.Unmarshal([]byte(doc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := manifest.Marshal(wf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := content(data, workflowForm)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(got)
+}
+
+const written = `openawf: 0.1.0
+name: keep
+summary: ""
+metadata:
+  a: null
+  b: {}
+  c: []
+  d: ""
+version: 1.0.0
+sha: sha256-whatever
+x-top: {}
+x-null: null
+x-list: [null, "", {}]
+start: a
+orchestration:
+  a:
+    pass: {task: b}
+    fail: {task: a, retries: null}
+  b:
+    task: c
+    session: fresh
+  c:
+    task: d
+    x-edge: null
+  d: null
+tasks:
+  a:
+    version: 2.0.0
+    sha: sha256-nested
+    summary: ""
+    uses: []
+    input:
+      type: object
+      properties:
+        p: {default: null, const: "007", enum: [null, "", "true", 1.50]}
+        q: {}
+      required: []
+    outcomes:
+      pass: {}
+      fail: {type: object, properties: {}}
+    body: a
+    x-task: ""
+  b:
+    output: {}
+    body: b
+  c:
+    body: c
+  d:
+    body: d
+mcp:
+  s:
+    type: http
+    url: https://example.com
+    headers: {A: ""}
+    oauth: {}
+    x-server: []
+  t:
+    type: stdio
+    command: t
+    args: []
+    env: {}
+    deny: []
+`
+
+func TestForm(t *testing.T) {
+	want := `{"mcp":{"s":{"headers":{"A":""},"type":"http","url":"https://example.com","x-server":[]},"t":{"command":"t","type":"stdio"}},` +
+		`"metadata":{"a":null,"b":{},"c":[],"d":""},"name":"keep","openawf":"0.1.0",` +
+		`"orchestration":{"a":{"fail":"a","pass":"b"},"b":{"session":"fresh","task":"c"},"c":{"task":"d","x-edge":null},"d":null},` +
+		`"start":"a","tasks":{` +
+		`"a":{"body":"a","input":{"properties":{"p":{"const":"007","default":null,"enum":[null,"","true",1.5]},"q":{}},"required":[],"type":"object"},` +
+		`"outcomes":{"fail":{"properties":{},"type":"object"},"pass":{}},"sha":"sha256-nested","version":"2.0.0","x-task":""},` +
+		`"b":{"body":"b"},"c":{"body":"c"},"d":{"body":"d"}},` +
+		`"x-list":[null,"",{}],"x-null":null,"x-top":{}}`
+	if got := workflowContent(t, written); got != want {
+		t.Errorf("got  %s\nwant %s", got, want)
+	}
+	empty := strings.Replace(written, "  a: null\n  b: {}\n  c: []\n  d: \"\"\n", "  {}\n", 1)
+	if got := workflowContent(t, empty); strings.Contains(got, "metadata") {
+		t.Errorf("empty metadata: got %s", got)
+	}
+}
+
+func TestEdgeForm(t *testing.T) {
+	const doc = "openawf: 0.1.0\nname: e\nstart: a\norchestration:\n  a: EDGE\n  b: null\ntasks:\n  a:\n    body: a\n  b:\n    body: b\n"
+	plain := workflowSum(t, strings.Replace(doc, "EDGE", "b", 1))
+	if got := workflowSum(t, strings.Replace(doc, "EDGE", "{task: b}", 1)); got != plain {
+		t.Errorf("{task: b}: got %s, want %s", got, plain)
+	}
+	if got := workflowSum(t, strings.Replace(doc, "EDGE", "{task: b, session: fresh}", 1)); got == plain {
+		t.Error("session: fresh hashes as no session")
+	}
+	if got := workflowSum(t, strings.Replace(doc, "EDGE", "{task: b, retries: 0}", 1)); got == plain {
+		t.Error("retries: 0 hashes as no retries")
+	}
+}
+
+func TestAlgorithms(t *testing.T) {
+	wf, err := manifest.Unmarshal([]byte(workflow))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, digits := range map[string]int{"sha256": 64, "sha384": 96, "sha512": 128} {
+		sha, err := sumWorkflow(name, wf)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.HasPrefix(sha, name+"-") || len(sha) != len(name)+1+digits {
+			t.Errorf("%s: got %s", name, sha)
+		}
+		wf.SHA = &sha
+		if err := CheckWorkflow(wf); err != nil {
+			t.Errorf("%s: got %v", name, err)
+		}
+		other := strings.Replace(sha, name, map[string]string{"sha256": "sha512", "sha384": "sha256", "sha512": "sha384"}[name], 1)
+		wf.SHA = &other
+		if err := CheckWorkflow(wf); !errors.Is(err, ErrMismatch) {
+			t.Errorf("%s digest under another prefix: got %v, want %v", name, err, ErrMismatch)
+		}
+	}
+}
+
+func TestCheckInline(t *testing.T) {
+	const doc = "---\nopenawf: 0.1.0\nversion: 1.0.0\nsummary: s\n---\n\n# t\n"
+	task, err := manifest.UnmarshalTask([]byte(doc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sha, err := Task(task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inline := *task
+	inline.OpenAWF = version.Version{}
+	inline.SHA = &sha
+	if err := CheckInline(task.OpenAWF, &inline); err != nil {
+		t.Errorf("inline: got %v", err)
+	}
+	inline.Source = "./t.md"
+	if err := CheckInline(task.OpenAWF, &inline); err != nil {
+		t.Errorf("bundled: got %v", err)
+	}
+	inline.Summary = "other"
+	if err := CheckInline(task.OpenAWF, &inline); !errors.Is(err, ErrMismatch) {
+		t.Errorf("edited: got %v, want %v", err, ErrMismatch)
+	}
+}
+
+func TestGolden(t *testing.T) {
+	for file, want := range map[string]string{
+		"pr-review.yaml":      "sha256-e6e3e09852b84a72b70656aba73c689deb22c9dfba763805d0ae877f17b0c4a2",
+		"feat-dev-small.yaml": "sha256-71bed92b6cddf7e5e894fc6091c7afc2cb164b35349bc6e3622685766b6aedbc",
+	} {
+		data, err := os.ReadFile(filepath.Join("testdata", file))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := workflowSum(t, string(data)); got != want {
+			t.Errorf("%s: got %s, want %s", file, got, want)
+		}
+	}
+}
+
+func TestGoldenTasks(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("testdata", "feat-dev-small.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wf, err := manifest.Unmarshal(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, want := range map[string]string{
+		"worktree-setup":  "sha256-4207f150da965878d0fa6273dce20bc86a20de54cac3738dc35a2780be851520",
+		"setup-stack":     "sha256-997dfbbefe636e55c494976805866b0a1a640308a3ad3e4b3f92921647aad177",
+		"create-diff":     "sha256-34f88c52a41abdbfab4924cdd0a02b6ad08251e2baac49e4a01af1d93e4808fc",
+		"testing":         "sha256-3e81d869c79d2a1148cef0dba8f2f9155df2a7ce09e46d03924bb71ab3a4150a",
+		"agentic-review":  "sha256-4adb2ca20aa9fcc74fccc9f460e119e254380c1b79c5202586e54add51e505e4",
+		"teardown-stack":  "sha256-df55b6b985f45728bb4fbe16b36ef334859c95bd41b337ab6a9b3de7a3e235bf",
+		"remove-worktree": "sha256-3eb86c40d716f67fa889976ed348cfd604a59642b059790bbe027dcb80ae4e04",
+	} {
+		task := *wf.Tasks[name].Task
+		task.OpenAWF = wf.OpenAWF
+		got, err := Task(&task)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != want {
+			t.Errorf("%s: got %s, want %s", name, got, want)
+		}
+		task.SHA = &got
+		if err := CheckInline(wf.OpenAWF, &task); err != nil {
+			t.Errorf("%s: got %v", name, err)
+		}
 	}
 }

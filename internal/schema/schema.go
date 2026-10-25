@@ -85,7 +85,7 @@ func check(declared, doc any, pointer string) []error {
 	err = sch.Validate(doc)
 	var invalid *jsonschema.ValidationError
 	if errors.As(err, &invalid) {
-		return violations(invalid)
+		return violations(invalid, doc)
 	}
 	if err != nil {
 		return []error{err}
@@ -93,7 +93,10 @@ func check(declared, doc any, pointer string) []error {
 	return nil
 }
 
-func violations(e *jsonschema.ValidationError) []error {
+func violations(e *jsonschema.ValidationError, doc any) []error {
+	if errs, ok := explain(e, doc); ok {
+		return errs
+	}
 	causes := e.Causes
 	switch e.ErrorKind.(type) {
 	case *kind.OneOf, *kind.AnyOf:
@@ -106,7 +109,7 @@ func violations(e *jsonschema.ValidationError) []error {
 	}
 	var out []error
 	for _, cause := range causes {
-		out = append(out, violations(cause)...)
+		out = append(out, violations(cause, doc)...)
 	}
 	return out
 }

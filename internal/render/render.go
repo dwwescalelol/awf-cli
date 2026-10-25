@@ -87,7 +87,7 @@ type TaskView struct {
 	Model       string
 	SHA         string
 	Outcomes    []string
-	Uses        []string
+	Uses        []Use
 	Input       string
 	Output      string
 	Body        template.HTML
@@ -104,11 +104,21 @@ type Edge struct {
 	Resume  bool
 }
 
+// Use is one entry of a task's uses: the server, or the qualified tool name,
+// that grants the task its tools.
+type Use struct {
+	Label  string
+	Server string
+}
+
 type Server struct {
-	Name      string
-	Transport string
-	Tools     string
-	UsedBy    []string
+	Name string
+	Type string
+	// Endpoint is the url of an http or sse server, or what starts a stdio
+	// server: its command or package, then its args.
+	Endpoint string
+	Tools    string
+	UsedBy   []string
 }
 
 // Workflow writes the page for a compiled workflow. doc supplies the fields
@@ -161,9 +171,9 @@ func Workflow(out io.Writer, path string, source []byte, doc *manifest.Workflow,
 	}
 
 	for _, srv := range w.Servers {
-		s := Server{Name: srv.Name, Transport: string(srv.Transport), Tools: tools(srv.Allow)}
+		s := Server{Name: srv.Name, Type: string(srv.Transport), Endpoint: endpoint(srv), Tools: tools(srv)}
 		for _, st := range w.States {
-			if slices.Contains(st.Task.Uses, srv) {
+			if slices.ContainsFunc(st.Task.Uses, func(u awf.Use) bool { return u.Server == srv }) {
 				s.UsedBy = append(s.UsedBy, st.Task.Name)
 			}
 		}
@@ -191,7 +201,10 @@ func Task(out io.Writer, path, name string, source []byte, doc *manifest.Task) e
 	if err != nil {
 		return err
 	}
-	t.Uses = doc.Uses
+	for _, entry := range doc.Uses {
+		server, _, _ := strings.Cut(entry, "/")
+		t.Uses = append(t.Uses, Use{Label: entry, Server: server})
+	}
 	return execute(out, Page{
 		Name:    name,
 		Version: t.Version,
@@ -285,7 +298,7 @@ func task(t *awf.Task, doc *manifest.Task) (TaskView, error) {
 		out.Outcomes = append(out.Outcomes, o.Name)
 	}
 	for _, u := range t.Uses {
-		out.Uses = append(out.Uses, u.Name)
+		out.Uses = append(out.Uses, Use{Label: u.String(), Server: u.Server.Name})
 	}
 	return out, nil
 }
@@ -329,14 +342,45 @@ func schemaText(schema map[string]any) (string, error) {
 	return strings.TrimRight(string(data), "\n"), nil
 }
 
-func tools(t awf.Tools) string {
-	if t.All {
+// tools says which of its tools a server lets the workflow call.
+func tools(s *awf.MCPServer) string {
+	switch {
+	case len(s.Deny) > 0:
+		return "all except " + strings.Join(s.Deny, ", ")
+	case s.Allow.All:
 		return "all tools"
-	}
-	if len(t.Names) == 0 {
+	case len(s.Allow.Names) == 0:
 		return "no tools"
 	}
-	return strings.Join(t.Names, ", ")
+	return "only " + strings.Join(s.Allow.Names, ", ")
+}
+
+// endpoint is the url of an http or sse server, or the command or package
+// that starts a stdio server followed by its args.
+func endpoint(s *awf.MCPServer) string {
+	if s.URL != "" {
+		return s.URL
+	}
+	start := s.Command
+	if p := s.Package; p != nil {
+		start = packageText(p)
+	}
+	return strings.Join(append([]string{start}, s.Args...), " ")
+}
+
+// packageText names a package as its registry does: npm name@version, pypi
+// name==version, an oci image reference, or an mcpb bundle URL with its
+// version.
+func packageText(p *awf.Package) string {
+	switch p.RegistryType {
+	case "npm":
+		return "npm " + p.Identifier + "@" + p.Version
+	case "pypi":
+		return "pypi " + p.Identifier + "==" + p.Version
+	case "oci":
+		return "oci " + p.Identifier + ":" + p.Version
+	}
+	return p.RegistryType + " " + p.Identifier + " " + p.Version
 }
 
 func versionString(v version.Version) string {

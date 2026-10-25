@@ -80,3 +80,26 @@ func TestLayoutRanks(t *testing.T) {
 		}
 	}
 }
+
+func TestServers(t *testing.T) {
+	path := filepath.Join("testdata", "pr-review.yaml")
+	f, err := load.ReadWorkflow(path, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := Workflow(&out, path, f.Source, f.Doc, f.Compiled, Scope{}, ""); err != nil {
+		t.Fatal(err)
+	}
+	page := out.String()
+	for _, want := range []string{
+		`<td>http</td><td><code>https://api.githubcopilot.com/mcp/</code></td><td>only get_pull_request, get_pull_request_diff, create_pull_request_review</td>`,
+		`<td>stdio</td><td><code>npm @modelcontextprotocol/server-filesystem@2.0.0 ${REPO_DIR}</code></td><td>only read_file, list_directory</td>`,
+		`<a class="chip" href="#mcp-github">github/get_pull_request</a>`,
+		`<a class="chip" href="#mcp-files">files</a>`,
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("page has no %q", want)
+		}
+	}
+}

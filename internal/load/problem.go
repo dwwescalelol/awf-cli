@@ -79,12 +79,13 @@ func onValue(path string, err error) error {
 }
 
 type source struct {
-	file string
-	root ast.Node
+	file  string
+	root  ast.Node
+	lines []string
 }
 
 func parse(path string, data []byte) (*source, error) {
-	src := &source{file: display(path)}
+	src := &source{file: display(path), lines: strings.Split(string(data), "\n")}
 	f, err := parser.ParseBytes(data, 0)
 	if err != nil {
 		var y yaml.Error
@@ -151,6 +152,10 @@ func (src *source) problem(err error, warning bool) *Problem {
 	switch e := err.(type) {
 	case *pathError:
 		p.Line, p.Column = src.position(strings.Split(e.path, "/"), e.value)
+	case *textError:
+		p.Line, p.Column = src.within(strings.Split(e.path, "/"), e.text, e.offset)
+	case *lineError:
+		p.Line, p.Column = e.line, e.column
 	case *schema.Violation:
 		p.Line, p.Column = src.position(e.Path, false)
 	case *awf.StateError:

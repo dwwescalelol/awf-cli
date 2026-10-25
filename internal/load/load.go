@@ -1,6 +1,7 @@
 package load
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"path/filepath"
@@ -45,11 +46,12 @@ func ParseTask(path string, data []byte, at *store.Entry) (*TaskFile, error) {
 	if err != nil {
 		return f, err
 	}
-	errs := f.read(front, body, at)
+	first := 1 + bytes.Count(data[:len(data)-len(body)], []byte("\n"))
+	errs := f.read(front, body, first, at)
 	return f, src.report(append(named(path, f.Doc != nil && f.Doc.SHA == nil), errs...))
 }
 
-func (f *TaskFile) read(front []byte, body string, at *store.Entry) []error {
+func (f *TaskFile) read(front []byte, body string, first int, at *store.Entry) []error {
 	var invalid []error
 	doc, err := manifest.TaskDocument(front, body)
 	switch {
@@ -69,13 +71,14 @@ func (f *TaskFile) read(front []byte, body string, at *store.Entry) []error {
 	if len(invalid) > 0 {
 		return invalid
 	}
+	errs := params("", f.Doc, inMarkdown(first))
 	if err := at.CheckVersion(f.Doc.Version); err != nil {
-		return []error{onValue("version", err)}
+		return append(errs, onValue("version", err))
 	}
 	if err := seal.CheckTask(f.Doc); err != nil {
-		return []error{onValue("sha", err)}
+		return append(errs, onValue("sha", err))
 	}
-	return nil
+	return errs
 }
 
 var ErrUnsealedVersion = errors.New("an unsealed document in an awf scope is a draft, name it draft or seal it")

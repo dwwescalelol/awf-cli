@@ -113,6 +113,8 @@ func task(name string, doc *manifest.Task, wf *manifest.Workflow, servers map[st
 		uses = append(uses, use)
 	}
 
+	errs = append(errs, params("tasks/"+name+"/", doc, inYAML("tasks/"+name+"/"))...)
+
 	outcomes := make([]awf.Outcome, 0, len(doc.Outcomes))
 	for _, outcome := range doc.Outcomes {
 		outcomes = append(outcomes, awf.Outcome{Name: outcome.Name, Schema: outcome.Schema})

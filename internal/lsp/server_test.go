@@ -360,3 +360,19 @@ func TestExitWithoutShutdown(t *testing.T) {
 		t.Errorf("got %v, want %v", err, ErrNoShutdown)
 	}
 }
+
+func TestPromptParameterDiagnostics(t *testing.T) {
+	c := start(t)
+	c.initialize()
+
+	path := draft(t, store.New(filepath.Join(t.TempDir(), ".awf")), store.Task, "lint")
+	text := read(t, path) + "\nUse `{{ branch }}`.\n"
+	c.open(path, text)
+	got := c.diagnostics()
+	if len(got.Diagnostics) != 1 || got.Diagnostics[0].Range.Start != at(text, "{{ branch }}").Start {
+		t.Fatalf("got %+v, want one diagnostic on the prompt parameter", got)
+	}
+	if d := got.Diagnostics[0]; !strings.Contains(d.Message, "the task has no input") {
+		t.Errorf("got %q, want the no input error", d.Message)
+	}
+}

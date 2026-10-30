@@ -131,6 +131,13 @@ dl.meta { display: flex; flex-wrap: wrap; gap: 8px 32px; margin: 22px 0 0; font-
 dl.meta div { min-width: 0; }
 dl.meta dt { color: var(--muted); }
 dl.meta dd { margin: 2px 0 0; font-family: var(--mono); overflow-wrap: anywhere; }
+dl.meta dd.chips { font-family: var(--sans); }
+.title .icon { width: 36px; height: 36px; object-fit: contain; align-self: center; border-radius: 6px; }
+.task .name .icon { width: 16px; height: 16px; object-fit: contain; vertical-align: -2px; margin-right: 8px; border-radius: 3px; }
+ol.chain { margin: 0; padding-left: 2.2ch; }
+ol.chain li { font-family: var(--mono); }
+ol.chain li::marker { color: var(--muted); }
+.chain-note { color: var(--muted); font-family: var(--sans); font-size: 12px; }
 .pill.invalid { border-color: transparent; background: var(--bad-soft); color: var(--bad); font: inherit; font-size: 12.5px; font-weight: 600; line-height: 1; cursor: pointer; }
 .menu-list .pill.invalid { cursor: inherit; font-size: 11.5px; }
 .overlay {
@@ -236,6 +243,7 @@ ul.next .policy { color: var(--muted); font-family: var(--sans); font-size: 12.5
 pre { margin: 0; padding: 10px 12px; background: var(--sunken); border: 1px solid var(--rule); border-radius: 8px; font-size: 12.5px; line-height: 1.5; overflow-x: auto; }
 
 .prose { border-left: 2px solid var(--rule); padding-left: 16px; max-width: 72ch; }
+.prose.system { margin-bottom: 18px; border-left-color: var(--accent-soft); }
 .prose > :first-child { margin-top: 0; }
 .prose > :last-child { margin-bottom: 0; }
 .prose h1 { font-size: 17px; margin: 0 0 8px; }
@@ -295,12 +303,22 @@ footer { color: var(--muted); font-size: 12.5px; text-align: center; padding: 0 
 
 <header class="doc">
   <div class="title">
+    {{with .About.Icon}}<img class="icon" src="{{.}}" alt="">{{end}}
     <h1>{{.Name}}</h1>
     {{with .Version}}<span class="ver">{{.}}</span>{{end}}
     {{if .Error}}<button class="pill invalid" type="button" data-overlay-open>Invalid</button>{{else if .SHA}}<span class="pill sealed" title="{{.SHA}}">Sealed</span>{{else}}<span class="pill">Draft</span>{{end}}
   </div>
   {{with .Summary}}<p class="summary">{{.}}</p>{{end}}
-  {{with .Model}}<dl class="meta"><div><dt>Default model</dt><dd>{{.}}</dd></div></dl>{{end}}
+  {{if or .Models .Effort .About.License .About.ExternalVersion .About.Authors .About.Tags}}
+  <dl class="meta">
+    {{with .Models}}<div><dt>Default model{{if gt (len .) 1}} chain{{end}}</dt><dd>{{template "models" .}}</dd></div>{{end}}
+    {{with .Effort}}<div><dt>Default effort</dt><dd>{{.}}</dd></div>{{end}}
+    {{with .About.License}}<div><dt>License</dt><dd>{{.}}</dd></div>{{end}}
+    {{with .About.ExternalVersion}}<div><dt>External version</dt><dd>{{.}}</dd></div>{{end}}
+    {{with .About.Authors}}<div><dt>Authors</dt><dd>{{range $i, $a := .}}{{if $i}}, {{end}}{{$a}}{{end}}</dd></div>{{end}}
+    {{with .About.Tags}}<div><dt>Tags</dt><dd class="chips">{{range .}}<span class="tag">{{.}}</span>{{end}}</dd></div>{{end}}
+  </dl>
+  {{end}}
   {{with .Warnings}}<ul class="warnings" aria-label="Warnings">{{range .}}<li>{{.}}</li>{{end}}</ul>{{end}}
 </header>
 
@@ -326,7 +344,7 @@ footer { color: var(--muted); font-size: 12.5px; text-align: center; padding: 0 
         {{range .Tasks}}
         <details class="task" id="task-{{.Name}}" data-task="{{.Name}}" open>
           <summary>
-            <span class="name">{{.Name}}{{with .Version}}<span class="v">{{.}}</span>{{end}}</span>
+            <span class="name">{{with .About.Icon}}<img class="icon" src="{{.}}" alt="">{{end}}{{.Name}}{{with .Version}}<span class="v">{{.}}</span>{{end}}</span>
             <span class="brief">{{.Summary}}</span>
             <span class="tags">
               {{if .Start}}<span class="tag start">start</span>{{end}}
@@ -336,7 +354,10 @@ footer { color: var(--muted); font-size: 12.5px; text-align: center; padding: 0 
           </summary>
           <div class="task-body">
             <dl class="facts">
-              {{with .Model}}<dt>Model</dt><dd><code>{{.}}</code></dd>{{end}}
+              {{with .Models}}<dt>Model{{if gt (len .) 1}} chain{{end}}</dt><dd>{{template "models" .}}</dd>{{end}}
+              {{with .Effort}}<dt>Effort</dt><dd>{{.}}</dd>{{end}}
+              {{with .MaxTurns}}<dt>Max turns</dt><dd>{{.}}</dd>{{end}}
+              {{with .Timeout}}<dt>Timeout</dt><dd>{{.}} per attempt</dd>{{end}}
               {{if $.Graph}}
               <dt>Next</dt>
               <dd>
@@ -348,18 +369,22 @@ footer { color: var(--muted); font-size: 12.5px; text-align: center; padding: 0 
                 </ul>
                 {{else}}<span class="tag end">terminal</span>{{end}}
               </dd>
-              {{else}}
-              {{with .Outcomes}}<dt>Outcomes</dt><dd class="chips">{{range .}}<code class="chip">{{.}}</code>{{end}}</dd>{{end}}
               {{end}}
               {{with .Uses}}<dt>Tools</dt><dd class="chips">{{range .}}{{if $.Graph}}<a class="chip" href="#mcp-{{.Server}}">{{.Label}}</a>{{else}}<code class="chip">{{.Label}}</code>{{end}}{{end}}</dd>{{end}}
+              {{with .About.License}}<dt>License</dt><dd>{{.}}</dd>{{end}}
+              {{with .About.ExternalVersion}}<dt>External version</dt><dd><code>{{.}}</code></dd>{{end}}
+              {{with .About.Authors}}<dt>Authors</dt><dd>{{range $i, $a := .}}{{if $i}}, {{end}}{{$a}}{{end}}</dd>{{end}}
+              {{with .About.Tags}}<dt>Tags</dt><dd class="chips">{{range .}}<span class="tag">{{.}}</span>{{end}}</dd>{{end}}
             </dl>
-            {{if or .Input .Output}}
+            {{if or .Input .Output .Outcomes}}
             <div class="io">
               {{with .Input}}<div><h3>Input</h3><pre><code>{{.}}</code></pre></div>{{end}}
+              {{range .Outcomes}}<div><h3>Outcome <code>{{.Name}}</code></h3><pre><code>{{or .Schema "any result"}}</code></pre></div>{{end}}
               {{with .Output}}<div><h3>Output</h3><pre><code>{{.}}</code></pre></div>{{end}}
             </div>
             {{end}}
-            {{with .Body}}<div class="prose">{{.}}</div>{{end}}
+            {{if .System}}<h3 class="prose-head">System</h3><div class="prose system">{{.System}}</div>{{end}}
+            {{if .Body}}{{if .System}}<h3 class="prose-head">Body</h3>{{end}}<div class="prose">{{.Body}}</div>{{end}}
           </div>
         </details>
         {{end}}
@@ -502,3 +527,4 @@ footer { color: var(--muted); font-size: 12.5px; text-align: center; padding: 0 
 {{with .Live}}<script>new EventSource("{{.}}").onmessage = () => location.reload();</script>{{end}}
 </body>
 </html>
+{{define "models"}}{{if gt (len .) 1}}<ol class="chain">{{range .}}<li>{{.}}</li>{{end}}</ol>{{else}}{{range .}}<code>{{.}}</code>{{end}}{{end}}{{end}}

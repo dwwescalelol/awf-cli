@@ -101,14 +101,7 @@ func inlineSeals(doc *manifest.Workflow) []error {
 		if t == nil || t.SHA == nil {
 			continue
 		}
-		standalone := *t
-		standalone.OpenAWF = doc.OpenAWF
-		err := seal.CheckTask(&standalone)
-		if err != nil {
-			standalone.Source = ""
-			err = seal.CheckTask(&standalone)
-		}
-		if err != nil {
+		if err := seal.CheckInline(doc.OpenAWF, t); err != nil {
 			errs = append(errs, onValue("tasks/"+name+"/sha", err))
 		}
 	}

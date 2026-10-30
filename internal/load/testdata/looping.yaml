@@ -12,8 +12,8 @@ orchestration:
 tasks:
   plan:
     outcomes:
-      - ok
-      - fail
+      ok: {}
+      fail: {}
     body: plan
   loop:
     body: loop

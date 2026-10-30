@@ -7,6 +7,7 @@ import (
 
 	"github.com/dwwescalelol/awf-cli/internal/awf"
 	"github.com/dwwescalelol/awf-cli/internal/manifest"
+	"github.com/dwwescalelol/awf-cli/internal/schema"
 )
 
 func TestWorkflow(t *testing.T) {
@@ -21,7 +22,7 @@ func TestWorkflow(t *testing.T) {
 	if len(w.States) != 3 {
 		t.Errorf("states: got %d, want 3", len(w.States))
 	}
-	if len(w.Servers) != 1 || !w.Servers[0].Tools.All {
+	if len(w.Servers) != 1 || !w.Servers[0].Allow.All {
 		t.Errorf("servers: got %+v, want gh with all tools", w.Servers)
 	}
 }
@@ -33,6 +34,10 @@ func TestWorkflowErrors(t *testing.T) {
 	}{
 		{file: "unbound.yaml", want: []error{ErrNotATask, ErrNotDeclared}},
 		{file: "trapped.yaml", want: []error{awf.ErrNoTerminal}},
+		{file: "noedge.yaml", want: []error{ErrNoEdge}},
+		{file: "nooutcomes.yaml", want: []error{ErrNoOutcomes}},
+		{file: "outcomeoutput.yaml", want: []error{schema.ErrOutcomesAndOutput}},
+		{file: "outcomeproperty.yaml", want: []error{schema.ErrOutcomeProperty}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.file, func(t *testing.T) {
@@ -65,6 +70,15 @@ func TestTask(t *testing.T) {
 	}
 	if f.Doc.OpenAWF.String() != "0.1.0" || len(f.Doc.Outcomes) != 2 {
 		t.Errorf("got %+v", f.Doc)
+	}
+	if names := f.Doc.Outcomes.Names(); names[0] != "ok" || names[1] != "fail" {
+		t.Errorf("outcomes: got %q, want declaration order", names)
+	}
+}
+
+func TestTaskOutcomeProperty(t *testing.T) {
+	if _, err := ReadTask(filepath.Join("testdata", "outcomeproperty.md"), nil); !errors.Is(err, schema.ErrOutcomeProperty) {
+		t.Errorf("got %v, want %v", err, schema.ErrOutcomeProperty)
 	}
 }
 

@@ -22,7 +22,7 @@ func (s *State) IsTerminal() bool {
 }
 
 type Edge struct {
-	On      Outcome
+	On      *Outcome
 	To      *State
 	Retries *int
 	Session Session
@@ -43,7 +43,8 @@ type Task struct {
 type MCPServer struct {
 	Name      string
 	Transport Transport
-	Tools     Tools
+	Allow     Tools
+	Deny      []string
 }
 
 type Tools struct {
@@ -51,7 +52,12 @@ type Tools struct {
 	Names []string
 }
 
-type Outcome string
+// Outcome is a named result a task may report, with the JSON Schema of the
+// data it returns.
+type Outcome struct {
+	Name   string
+	Schema map[string]any
+}
 
 type Session string
 

@@ -48,7 +48,6 @@ tasks:
   a:
     version: 0.2.0
     sha: sha256-nested
-    outcomes: []
     body: a
 `
 

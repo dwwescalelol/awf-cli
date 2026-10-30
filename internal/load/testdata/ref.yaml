@@ -13,5 +13,9 @@ tasks:
   done:
     body: done
 mcp:
-  fs: {}
-  gh: {}
+  fs:
+    type: stdio
+    command: mcp-fs
+  gh:
+    type: http
+    url: https://example.com/mcp

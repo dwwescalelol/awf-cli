@@ -6,6 +6,7 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -19,7 +20,17 @@ var (
 	ErrNotADocument = errors.New("not a document")
 	ErrNoVersion    = errors.New("missing version")
 	ErrNotSupported = errors.New("unsupported version")
+
+	ErrOutcomesAndOutput = errors.New("a task has both outcomes and output")
+	ErrOutcomeProperty   = errors.New(`an outcome's schema declares a property named "outcome"`)
 )
+
+// named maps the location of a schema whose "not" encodes an error of spec
+// section 7.1 to that error.
+var named = map[string]error{
+	"#/$defs/task": ErrOutcomesAndOutput,
+	"#/$defs/task/properties/outcomes/additionalProperties": ErrOutcomeProperty,
+}
 
 type Violation struct {
 	Path []string
@@ -42,7 +53,7 @@ func Validate(data []byte) (any, []error) {
 	if err != nil {
 		return nil, []error{err}
 	}
-	return doc, check(doc, "")
+	return doc, check(doc, doc, "")
 }
 
 func ValidateTask(data []byte) []error {
@@ -50,14 +61,20 @@ func ValidateTask(data []byte) []error {
 	if err != nil {
 		return []error{err}
 	}
-	if _, ok := doc.(map[string]any); !ok {
+	fields, ok := doc.(map[string]any)
+	if !ok {
 		return []error{fmt.Errorf("task %T: %w", doc, ErrNotADocument)}
 	}
-	return check(doc, "#/$defs/task")
+	// A task document declares openawf. The task it holds does not.
+	task := maps.Clone(fields)
+	delete(task, "openawf")
+	return check(doc, task, "#/$defs/task")
 }
 
-func check(doc any, pointer string) []error {
-	version, err := versionOf(doc)
+// check validates doc against the schema at pointer. The spec version comes
+// from declared.
+func check(declared, doc any, pointer string) []error {
+	version, err := versionOf(declared)
 	if err != nil {
 		return []error{err}
 	}
@@ -95,6 +112,12 @@ func violations(e *jsonschema.ValidationError) []error {
 }
 
 func leaf(e *jsonschema.ValidationError) []error {
+	if _, ok := e.ErrorKind.(*kind.Not); ok {
+		_, at, _ := strings.Cut(e.SchemaURL, "#")
+		if err, ok := named["#"+at]; ok {
+			return []error{located(e.InstanceLocation, err)}
+		}
+	}
 	extra, ok := e.ErrorKind.(*kind.AdditionalProperties)
 	if !ok {
 		return []error{violation(e.InstanceLocation, e.ErrorKind)}
@@ -109,10 +132,14 @@ func leaf(e *jsonschema.ValidationError) []error {
 
 func violation(path []string, k jsonschema.ErrorKind) *Violation {
 	msg := (&jsonschema.ValidationError{ErrorKind: k}).BasicOutput().Error.String()
+	return located(path, errors.New(msg))
+}
+
+func located(path []string, err error) *Violation {
 	if len(path) > 0 {
-		msg = strings.Join(path, "/") + ": " + msg
+		err = fmt.Errorf("%s: %w", strings.Join(path, "/"), err)
 	}
-	return &Violation{Path: path, Err: errors.New(msg)}
+	return &Violation{Path: path, Err: err}
 }
 
 func closest(branches []*jsonschema.ValidationError) *jsonschema.ValidationError {

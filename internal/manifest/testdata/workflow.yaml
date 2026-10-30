@@ -1,7 +1,7 @@
 openawf: 0.1.0
 name: feat-dev
 summary: Plan, review and ship a feature.
-model: opus
+model: anthropic/claude-opus-5
 version: 0.2.0
 sha: null
 start: plan
@@ -11,6 +11,8 @@ orchestration:
     fail:
       task: plan
       retries: 2
+      x-runner:
+        note: replan
     ok: ship
   ship: null
 tasks:
@@ -18,27 +20,50 @@ tasks:
     summary: Plan the change.
     body: |
       # plan
+    x-runner:
+      cwd: .
   review:
-    model: sonnet
+    model:
+      - anthropic/claude-sonnet-5
+      - openai/gpt-6
     outcomes:
-      - ok
-      - fail
+      ok:
+        type: object
+      fail:
+        properties:
+          reason:
+            type: string
+        required:
+          - reason
+        type: object
     uses:
       - fs
       - gh
     body: |
       # review
+    effort: high
+    max-turns: 10
   ship:
     $ref: ./ship.md
 mcp:
   fs:
-    transport: stdio
-    tools: "*"
+    type: stdio
+    allow: "*"
+    command: mcp-fs
   gh:
-    transport: http
-    tools:
+    type: http
+    allow:
       - create_pr
       - list_issues
+    url: https://example.com/mcp
   none:
-    transport: stdio
-    tools: []
+    type: stdio
+    deny:
+      - delete_file
+    command: mcp-none
+license: Apache-2.0
+metadata:
+  tags:
+    - dev
+x-runner:
+  mode: plan

@@ -22,8 +22,8 @@ func TestBundle(t *testing.T) {
 	if diff.Task.Summary != "Produce a diff for the branch." || diff.Task.Body == "" {
 		t.Errorf("diff: got %+v", diff.Task)
 	}
-	if diff.Task.Rest["system"] == nil || diff.Task.Rest["x-runner"] == nil {
-		t.Errorf("rest: got %+v, want system and x-runner kept", diff.Task.Rest)
+	if _, ok := diff.Task.Extensions.Value("x-runner"); diff.Task.System == "" || !ok {
+		t.Errorf("diff: got %+v, want system and x-runner kept", diff.Task)
 	}
 	if diff.Task.OpenAWF != (version.Version{}) {
 		t.Errorf("openawf: got %s, want omitted", diff.Task.OpenAWF)

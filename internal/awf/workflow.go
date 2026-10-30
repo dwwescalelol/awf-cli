@@ -5,7 +5,8 @@ import "github.com/dwwescalelol/awf-cli/internal/version"
 type Workflow struct {
 	Name    string
 	Summary string
-	Model   string
+	Model   []string
+	Effort  string
 	Version version.Version
 	Start   *State
 	States  []*State
@@ -32,11 +33,15 @@ type Task struct {
 	Name     string
 	Version  version.Version
 	Summary  string
-	Model    string
+	Model    []string
+	Effort   string
+	MaxTurns int
+	Timeout  int
 	Input    map[string]any
 	Output   map[string]any
 	Outcomes []Outcome
 	Uses     []*MCPServer
+	System   string
 	Body     string
 }
 
@@ -62,7 +67,9 @@ type Outcome struct {
 type Session string
 
 const (
-	Fresh  Session = "fresh"
+	// Fresh starts the task in a new agent session.
+	Fresh Session = "fresh"
+	// Resume continues the target task's own previous session.
 	Resume Session = "resume"
 )
 

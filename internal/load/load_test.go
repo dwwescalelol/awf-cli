@@ -3,6 +3,7 @@ package load
 import (
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/dwwescalelol/awf-cli/internal/awf"
@@ -95,5 +96,12 @@ func TestTaskErrors(t *testing.T) {
 func TestTaskReservedBody(t *testing.T) {
 	if _, err := ReadTask(filepath.Join("testdata", "bodykey.md"), nil); !errors.Is(err, manifest.ErrReservedBody) {
 		t.Errorf("got %v, want %v", err, manifest.ErrReservedBody)
+	}
+}
+
+func TestDuplicateModel(t *testing.T) {
+	_, err := ReadWorkflow(filepath.Join("testdata", "dupmodel.yaml"), nil, nil)
+	if err == nil || !strings.Contains(err.Error(), "model") {
+		t.Errorf("got %v, want the duplicate model rejected", err)
 	}
 }

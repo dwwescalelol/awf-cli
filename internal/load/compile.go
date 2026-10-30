@@ -50,7 +50,8 @@ func compile(doc *manifest.Workflow) (*awf.Workflow, []error) {
 	w := &awf.Workflow{
 		Name:    doc.Name,
 		Summary: doc.Summary,
-		Model:   doc.Model.String(),
+		Model:   doc.Model,
+		Effort:  string(doc.Effort),
 		Version: doc.Version,
 		Start:   start,
 		States:  ordered(states),
@@ -79,15 +80,21 @@ func states(doc *manifest.Workflow, servers map[string]*awf.MCPServer) (map[stri
 			out[name] = &awf.State{Task: &awf.Task{Name: name}}
 			continue
 		}
-		t, e := task(name, entry.Task, doc.Model.String(), servers)
+		t, e := task(name, entry.Task, doc, servers)
 		out[name], errs = &awf.State{Task: t}, append(errs, e...)
 	}
 	return out, errs
 }
 
-func task(name string, doc *manifest.Task, model string, servers map[string]*awf.MCPServer) (*awf.Task, []error) {
+// task lowers one task. It inherits the workflow's model and effort when it
+// sets neither of its own.
+func task(name string, doc *manifest.Task, wf *manifest.Workflow, servers map[string]*awf.MCPServer) (*awf.Task, []error) {
+	model, effort := wf.Model, wf.Effort
 	if len(doc.Model) > 0 {
-		model = doc.Model.String()
+		model = doc.Model
+	}
+	if doc.Effort != "" {
+		effort = doc.Effort
 	}
 
 	var errs []error
@@ -111,10 +118,14 @@ func task(name string, doc *manifest.Task, model string, servers map[string]*awf
 		Version:  doc.Version,
 		Summary:  doc.Summary,
 		Model:    model,
+		Effort:   string(effort),
+		MaxTurns: doc.MaxTurns,
+		Timeout:  doc.Timeout,
 		Input:    doc.Input,
 		Output:   doc.Output,
 		Outcomes: outcomes,
 		Uses:     uses,
+		System:   string(doc.System),
 		Body:     string(doc.Body),
 	}, errs
 }

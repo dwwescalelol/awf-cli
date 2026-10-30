@@ -351,7 +351,7 @@ footer { color: var(--muted); font-size: 12.5px; text-align: center; padding: 0 
               {{else}}
               {{with .Outcomes}}<dt>Outcomes</dt><dd class="chips">{{range .}}<code class="chip">{{.}}</code>{{end}}</dd>{{end}}
               {{end}}
-              {{with .Uses}}<dt>MCP</dt><dd class="chips">{{range .}}{{if $.Graph}}<a class="chip" href="#mcp-{{.}}">{{.}}</a>{{else}}<code class="chip">{{.}}</code>{{end}}{{end}}</dd>{{end}}
+              {{with .Uses}}<dt>Tools</dt><dd class="chips">{{range .}}{{if $.Graph}}<a class="chip" href="#mcp-{{.Server}}">{{.Label}}</a>{{else}}<code class="chip">{{.Label}}</code>{{end}}{{end}}</dd>{{end}}
             </dl>
             {{if or .Input .Output}}
             <div class="io">
@@ -372,10 +372,10 @@ footer { color: var(--muted); font-size: 12.5px; text-align: center; padding: 0 
       <h2>MCP servers<span class="count">{{len .}}</span></h2>
       <div class="servers-wrap">
       <table class="servers">
-        <thead><tr><th>Name</th><th>Transport</th><th>Tools</th><th>Used by</th></tr></thead>
+        <thead><tr><th>Name</th><th>Type</th><th>Endpoint</th><th>Tools</th><th>Used by</th></tr></thead>
         <tbody>
           {{range .}}
-          <tr id="mcp-{{.Name}}"><td>{{.Name}}</td><td>{{or .Transport "unspecified"}}</td><td>{{.Tools}}</td><td>{{range $i, $t := .UsedBy}}{{if $i}}, {{end}}<a href="#task-{{$t}}">{{$t}}</a>{{else}}<span style="color:var(--muted)">no task</span>{{end}}</td></tr>
+          <tr id="mcp-{{.Name}}"><td>{{.Name}}</td><td>{{or .Type "unspecified"}}</td><td><code>{{.Endpoint}}</code></td><td>{{.Tools}}</td><td>{{range $i, $t := .UsedBy}}{{if $i}}, {{end}}<a href="#task-{{$t}}">{{$t}}</a>{{else}}<span style="color:var(--muted)">no task</span>{{end}}</td></tr>
           {{end}}
         </tbody>
       </table>

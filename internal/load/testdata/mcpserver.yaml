@@ -1,0 +1,38 @@
+openawf: 0.1.0
+name: mcp-server
+sha: null
+start: plan
+orchestration:
+  plan: null
+tasks:
+  plan:
+    body: plan
+mcp:
+  both:
+    type: stdio
+    command: mcp-both
+    allow: [a]
+    deny: [b]
+  empty:
+    type: stdio
+    command: mcp-empty
+    allow: []
+  neither:
+    type: stdio
+  twice:
+    type: stdio
+    command: mcp-twice
+    package: {registry-type: npm, identifier: twice, version: 1.0.0}
+  remote:
+    type: sse
+    env: {A: b}
+  local:
+    type: stdio
+    command: mcp-local
+    url: https://example.com/mcp
+  latest:
+    type: stdio
+    package: {registry-type: npm, identifier: latest, version: latest}
+  bundle:
+    type: stdio
+    package: {registry-type: mcpb, identifier: https://example.com/b.mcpb, version: 1.0.0}

@@ -1,0 +1,31 @@
+openawf: 0.1.0
+name: mcp-uses
+sha: null
+start: plan
+orchestration:
+  plan: null
+tasks:
+  plan:
+    uses:
+      - absent
+      - absent/read
+      - gh/
+      - gh/delete_repo
+      - fs/rm
+      - fs/read
+      - gh/list_issues
+    body: plan
+mcp:
+  gh:
+    type: http
+    url: https://example.com/mcp
+    headers:
+      Authorization: Bearer ${1TOKEN}
+    allow: [list_issues]
+  fs:
+    type: stdio
+    command: mcp-fs
+    args: ["${ROOT"]
+    env:
+      HOME: ${HOME-DIR}
+    deny: [rm]

@@ -4,7 +4,6 @@ package manifest
 import (
 	"errors"
 	"fmt"
-	"maps"
 	"reflect"
 	"slices"
 	"strings"
@@ -22,6 +21,7 @@ var (
 	ErrDuplicateModel = errors.New("lists a model more than once")
 	ErrNotSchema      = errors.New("not a JSON Schema object")
 	ErrNotOutcome     = errors.New("not an outcome name")
+	ErrNotString      = errors.New("not a string")
 )
 
 type Workflow struct {
@@ -98,9 +98,6 @@ func lookup(items yaml.MapSlice, key string) (any, bool) {
 	}
 	return nil, false
 }
-
-// Fields holds the members of a server that have no field of their own.
-type Fields map[string]any
 
 // Models is one model, or a fallback chain of distinct models, each written
 // provider/name.
@@ -188,12 +185,47 @@ func (o Outcomes) Names() []string {
 	return names
 }
 
+// MCPServer is an MCP server the workflow's tasks call. A stdio server takes
+// command or package, args and env. An http or sse server takes url, headers
+// and oauth.
 type MCPServer struct {
 	Type       string     `yaml:"type"`
+	Command    string     `yaml:"command,omitempty"`
+	Package    *Package   `yaml:"package,omitempty"`
+	Args       []string   `yaml:"args,omitempty"`
+	Env        StringMap  `yaml:"env,omitempty"`
+	URL        string     `yaml:"url,omitempty"`
+	Headers    StringMap  `yaml:"headers,omitempty"`
+	OAuth      *OAuth     `yaml:"oauth,omitempty"`
 	Allow      *MCPTools  `yaml:"allow,omitempty"`
 	Deny       []string   `yaml:"deny,omitempty"`
-	Rest       Fields     `yaml:",inline"`
+	Timeout    int        `yaml:"timeout,omitempty"`
 	Extensions Extensions `yaml:"-"`
+}
+
+// Package is a published package that provides a stdio server.
+type Package struct {
+	RegistryType string `yaml:"registry-type"`
+	Identifier   string `yaml:"identifier"`
+	Version      string `yaml:"version"`
+	FileSHA256   string `yaml:"file-sha256,omitempty"`
+}
+
+// OAuth is the OAuth client a runner uses to authorize against an http or sse
+// server.
+type OAuth struct {
+	ClientID     string   `yaml:"client-id,omitempty"`
+	Scopes       []string `yaml:"scopes,omitempty"`
+	CallbackPort int      `yaml:"callback-port,omitempty"`
+	MetadataURL  string   `yaml:"metadata-url,omitempty"`
+}
+
+// StringMap is an object of strings, in the order its members are written.
+type StringMap []KeyValue
+
+type KeyValue struct {
+	Key   string
+	Value string
 }
 
 type MCPTools struct {
@@ -245,7 +277,6 @@ func (s *MCPServer) UnmarshalYAML(data []byte) error {
 		return err
 	}
 	*s = MCPServer(fields)
-	s.Rest = s.Rest.without(s)
 	var err error
 	s.Extensions, err = extensions(data)
 	return err
@@ -278,8 +309,7 @@ func isExtension(key any) bool {
 }
 
 // members lists the fields of the struct v in field order as a mapping,
-// leaving out empty omitempty fields, then appends ext. An inline Fields map
-// adds its members in sorted order.
+// leaving out empty omitempty fields, then appends ext.
 func members(v any, ext Extensions) yaml.MapSlice {
 	rv := reflect.ValueOf(v)
 	rt := rv.Type()
@@ -291,13 +321,6 @@ func members(v any, ext Extensions) yaml.MapSlice {
 		}
 		name, options, _ := strings.Cut(tag, ",")
 		field := rv.Field(i)
-		if options == "inline" {
-			rest, _ := field.Interface().(Fields)
-			for _, key := range slices.Sorted(maps.Keys(rest)) {
-				out = append(out, yaml.MapItem{Key: key, Value: rest[key]})
-			}
-			continue
-		}
 		if options == "omitempty" && empty(field) {
 			continue
 		}
@@ -314,26 +337,6 @@ func empty(v reflect.Value) bool {
 		return v.IsNil()
 	}
 	return v.IsZero()
-}
-
-// without drops the members that the struct v points at holds in fields of
-// its own, and its extension keys. An inline map receives every member, not
-// only the unknown ones.
-func (f Fields) without(v any) Fields {
-	t := reflect.TypeOf(v).Elem()
-	for i := range t.NumField() {
-		name, _, _ := strings.Cut(t.Field(i).Tag.Get("yaml"), ",")
-		delete(f, name)
-	}
-	for key := range f {
-		if isExtension(key) {
-			delete(f, key)
-		}
-	}
-	if len(f) == 0 {
-		return nil
-	}
-	return f
 }
 
 func Unmarshal(data []byte) (*Workflow, error) {
@@ -558,6 +561,35 @@ func (o Outcomes) MarshalYAML() (any, error) {
 			schema = map[string]any{}
 		}
 		items = append(items, yaml.MapItem{Key: outcome.Name, Value: schema})
+	}
+	return items, nil
+}
+
+func (m *StringMap) UnmarshalYAML(data []byte) error {
+	var items yaml.MapSlice
+	if err := yaml.UnmarshalWithOptions(data, &items, yaml.UseOrderedMap()); err != nil {
+		return err
+	}
+	out := make(StringMap, 0, len(items))
+	for _, item := range items {
+		key, ok := item.Key.(string)
+		if !ok {
+			return fmt.Errorf("key %v: %w", item.Key, ErrNotString)
+		}
+		value, ok := item.Value.(string)
+		if !ok {
+			return fmt.Errorf("%s %T: %w", key, item.Value, ErrNotString)
+		}
+		out = append(out, KeyValue{Key: key, Value: value})
+	}
+	*m = out
+	return nil
+}
+
+func (m StringMap) MarshalYAML() (any, error) {
+	items := make(yaml.MapSlice, 0, len(m))
+	for _, kv := range m {
+		items = append(items, yaml.MapItem{Key: kv.Key, Value: kv.Value})
 	}
 	return items, nil
 }

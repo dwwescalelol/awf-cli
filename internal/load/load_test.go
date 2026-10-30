@@ -105,3 +105,90 @@ func TestDuplicateModel(t *testing.T) {
 		t.Errorf("got %v, want the duplicate model rejected", err)
 	}
 }
+
+func TestMCPUses(t *testing.T) {
+	_, err := ReadWorkflow(filepath.Join("testdata", "mcpuses.yaml"), nil, nil)
+	var problems Problems
+	if !errors.As(err, &problems) {
+		t.Fatalf("got %v, want problems", err)
+	}
+	want := []struct {
+		line, column int
+		err          error
+		text         string
+	}{
+		{10, 9, ErrNotDeclared, `"absent"`},
+		{11, 9, ErrNotDeclared, `server "absent"`},
+		{12, 9, ErrNoTool, `"gh/"`},
+		{13, 9, ErrNotAllowed, `tool "delete_repo"`},
+		{14, 9, ErrDenied, `tool "rm"`},
+		{23, 22, manifest.ErrBadPlaceholder, `${1TOKEN}`},
+		{28, 12, manifest.ErrBadPlaceholder, `${ROOT`},
+		{30, 13, manifest.ErrBadPlaceholder, `${HOME-DIR}`},
+	}
+	if len(problems) != len(want) {
+		t.Fatalf("got %d problems, want %d:\n%v", len(problems), len(want), err)
+	}
+	for i, w := range want {
+		p := problems[i]
+		if p.Line != w.line || p.Column != w.column || !errors.Is(p, w.err) || !strings.Contains(p.Message(), w.text) {
+			t.Errorf("problem %d: got %v, want %d:%d %v naming %s", i, p, w.line, w.column, w.err, w.text)
+		}
+	}
+}
+
+func TestMCPServers(t *testing.T) {
+	_, err := ReadWorkflow(filepath.Join("testdata", "mcpserver.yaml"), nil, nil)
+	var problems Problems
+	if !errors.As(err, &problems) {
+		t.Fatalf("got %v, want problems", err)
+	}
+	want := []struct {
+		path string
+		err  error
+	}{
+		{"mcp/both/deny", schema.ErrAllowAndDeny},
+		{"mcp/empty/allow", schema.ErrEmptyAllow},
+		{"mcp/neither", schema.ErrNoCommand},
+		{"mcp/twice/package", schema.ErrCommandAndPackage},
+		{"mcp/remote", schema.ErrNoURL},
+		{"mcp/remote/env", schema.ErrRemoteField},
+		{"mcp/local/url", schema.ErrStdioField},
+		{"mcp/latest/package/version", schema.ErrLatest},
+		{"mcp/bundle/package", schema.ErrNoFileSHA},
+	}
+	for _, w := range want {
+		found := false
+		for _, p := range problems {
+			if errors.Is(p, w.err) && strings.HasPrefix(p.Message(), w.path+":") {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("no %q at %s in:\n%v", w.err, w.path, err)
+		}
+	}
+	if len(problems) != len(want) {
+		t.Errorf("got %d problems, want %d:\n%v", len(problems), len(want), err)
+	}
+}
+
+func TestPRReviewExample(t *testing.T) {
+	f, err := ReadWorkflow(filepath.Join("testdata", "pr-review.yaml"), nil, nil)
+	if err != nil {
+		t.Fatalf("ReadWorkflow: %v", err)
+	}
+	var gather *awf.Task
+	for _, s := range f.Compiled.States {
+		if s.Task.Name == "gather" {
+			gather = s.Task
+		}
+	}
+	if gather == nil || len(gather.Uses) != 3 || gather.Uses[0].String() != "github/get_pull_request" || gather.Uses[2].Tool != "" {
+		t.Fatalf("gather uses: got %+v", gather)
+	}
+	files := gather.Uses[2].Server
+	if files.Package == nil || files.Package.RegistryType != "npm" || files.Args[0] != "${REPO_DIR}" || files.Permits("write_file") {
+		t.Errorf("files: got %+v", files)
+	}
+}

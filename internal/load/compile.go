@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 
 	"github.com/dwwescalelol/awf-cli/internal/awf"
 	"github.com/dwwescalelol/awf-cli/internal/manifest"
@@ -14,6 +15,9 @@ var (
 	ErrNotATask     = errors.New("not a defined task")
 	ErrNoNode       = errors.New("no orchestration node")
 	ErrNotDeclared  = errors.New("not declared in mcp")
+	ErrNoTool       = errors.New("names no tool after the /")
+	ErrNotAllowed   = errors.New("not in its server's allow list")
+	ErrDenied       = errors.New("listed in its server's deny list")
 	ErrMustBranch   = errors.New("must branch")
 	ErrNoOutcomes   = errors.New("task emits no outcomes")
 	ErrNotAnOutcome = errors.New("not an outcome")
@@ -24,8 +28,9 @@ var (
 // to what it names. It reports every unbound name at once, and yields a
 // machine only when all of them bind.
 func compile(doc *manifest.Workflow) (*awf.Workflow, []error) {
-	servers := servers(doc.MCP)
-	states, errs := states(doc, servers)
+	servers, errs := servers(doc.MCP)
+	states, e := states(doc, servers)
+	errs = append(errs, e...)
 
 	for _, name := range sorted(doc.Orchestration) {
 		state, ok := states[name]
@@ -98,14 +103,14 @@ func task(name string, doc *manifest.Task, wf *manifest.Workflow, servers map[st
 	}
 
 	var errs []error
-	uses := make([]*awf.MCPServer, 0, len(doc.Uses))
-	for i, use := range doc.Uses {
-		server, ok := servers[use]
-		if !ok {
-			errs = append(errs, onValue(fmt.Sprintf("tasks/%s/uses/%d", name, i), fmt.Errorf("tasks/%s/uses %q: %w", name, use, ErrNotDeclared)))
+	uses := make([]awf.Use, 0, len(doc.Uses))
+	for i, entry := range doc.Uses {
+		use, err := grant(entry, servers)
+		if err != nil {
+			errs = append(errs, onValue(fmt.Sprintf("tasks/%s/uses/%d", name, i), fmt.Errorf("tasks/%s/uses %q: %w", name, entry, err)))
 			continue
 		}
-		uses = append(uses, server)
+		uses = append(uses, use)
 	}
 
 	outcomes := make([]awf.Outcome, 0, len(doc.Outcomes))
@@ -206,14 +211,77 @@ func edge(path string, on *awf.Outcome, doc manifest.Edge, states map[string]*aw
 	return awf.Edge{On: on, To: to, Retries: doc.Retries, Session: session}, nil
 }
 
-func servers(docs map[string]manifest.MCPServer) map[string]*awf.MCPServer {
+// grant binds one entry of a task's uses: a server name, or a qualified tool
+// name whose server is the text before the first /.
+func grant(entry string, servers map[string]*awf.MCPServer) (awf.Use, error) {
+	name, tool, qualified := strings.Cut(entry, "/")
+	server, ok := servers[name]
+	switch {
+	case !ok && qualified:
+		return awf.Use{}, fmt.Errorf("server %q: %w", name, ErrNotDeclared)
+	case !ok:
+		return awf.Use{}, ErrNotDeclared
+	case qualified && tool == "":
+		return awf.Use{}, ErrNoTool
+	case qualified && slices.Contains(server.Deny, tool):
+		return awf.Use{}, fmt.Errorf("tool %q: %w", tool, ErrDenied)
+	case qualified && !server.Permits(tool):
+		return awf.Use{}, fmt.Errorf("tool %q: %w", tool, ErrNotAllowed)
+	}
+	return awf.Use{Server: server, Tool: tool}, nil
+}
+
+// servers lowers the declared servers. It reports each malformed placeholder
+// in their args, env and headers.
+func servers(docs map[string]manifest.MCPServer) (map[string]*awf.MCPServer, []error) {
 	out := make(map[string]*awf.MCPServer, len(docs))
-	for name, doc := range docs {
-		allow := awf.Tools{All: true}
-		if doc.Allow != nil {
-			allow = awf.Tools{All: doc.Allow.All, Names: doc.Allow.Names}
+	var errs []error
+	for _, name := range sorted(docs) {
+		doc := docs[name]
+		for _, value := range doc.Credentials() {
+			if _, err := manifest.Placeholders(value.Value); err != nil {
+				path := "mcp/" + name + "/" + value.Key
+				errs = append(errs, onValue(path, fmt.Errorf("%s: %w", path, err)))
+			}
 		}
-		out[name] = &awf.MCPServer{Name: name, Transport: awf.Transport(doc.Type), Allow: allow, Deny: doc.Deny}
+		out[name] = server(name, doc)
+	}
+	return out, errs
+}
+
+func server(name string, doc manifest.MCPServer) *awf.MCPServer {
+	allow := awf.Tools{All: true}
+	if doc.Allow != nil {
+		allow = awf.Tools{All: doc.Allow.All, Names: doc.Allow.Names}
+	}
+	s := &awf.MCPServer{
+		Name:      name,
+		Transport: awf.Transport(doc.Type),
+		Command:   doc.Command,
+		Args:      doc.Args,
+		Env:       vars(doc.Env),
+		URL:       doc.URL,
+		Headers:   vars(doc.Headers),
+		Allow:     allow,
+		Deny:      doc.Deny,
+		Timeout:   doc.Timeout,
+	}
+	if p := doc.Package; p != nil {
+		s.Package = &awf.Package{RegistryType: p.RegistryType, Identifier: p.Identifier, Version: p.Version, FileSHA256: p.FileSHA256}
+	}
+	if o := doc.OAuth; o != nil {
+		s.OAuth = &awf.OAuth{ClientID: o.ClientID, Scopes: o.Scopes, CallbackPort: o.CallbackPort, MetadataURL: o.MetadataURL}
+	}
+	return s
+}
+
+func vars(m manifest.StringMap) []awf.Var {
+	if len(m) == 0 {
+		return nil
+	}
+	out := make([]awf.Var, len(m))
+	for i, kv := range m {
+		out[i] = awf.Var{Name: kv.Key, Value: kv.Value}
 	}
 	return out
 }

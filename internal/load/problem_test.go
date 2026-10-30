@@ -86,3 +86,25 @@ func TestTaskPositions(t *testing.T) {
 	_, err = ReadTask(filepath.Join("testdata", "bodykey.md"), nil)
 	check(t, problems(t, err), []located{{file: "bodykey.md", line: 3, col: 1, want: manifest.ErrReservedBody}})
 }
+
+func TestPromptParameterPositions(t *testing.T) {
+	_, err := ReadWorkflow(filepath.Join("testdata", "params.yaml"), nil, nil)
+	check(t, problems(t, err), []located{
+		{file: "params.yaml", line: 17, col: 30, want: ErrUnknownField},
+		{file: "params.yaml", line: 20, col: 18, want: ErrUnknownField},
+		{file: "params.yaml", line: 21, col: 16, want: ErrUnknownField},
+		{file: "params.yaml", line: 32, col: 14, want: ErrUnknownField},
+		{file: "params.yaml", line: 39, col: 11, want: ErrUnknownField},
+		{file: "params.yaml", line: 43, col: 14, want: ErrNoInput},
+	})
+
+	_, err = ReadTask(filepath.Join("testdata", "params.md"), nil)
+	check(t, problems(t, err), []located{
+		{file: "params.md", line: 8, col: 26, want: ErrUnknownField},
+		{file: "params.md", line: 13, col: 27, want: ErrUnknownField},
+		{file: "params.md", line: 16, col: 10, want: ErrUnknownField},
+	})
+
+	_, err = ReadTask(filepath.Join("testdata", "noinput.md"), nil)
+	check(t, problems(t, err), []located{{file: "noinput.md", line: 5, col: 6, want: ErrNoInput}})
+}

@@ -1,0 +1,43 @@
+openawf: 0.1.0
+name: params
+sha: null
+start: plain
+orchestration:
+  plain: quoted
+  quoted: literal
+  literal: folded
+  folded: bare
+  bare: null
+tasks:
+  plain:
+    input:
+      type: object
+      properties:
+        known: { type: string }
+    body: Read {{known}} and {{ missing }}.
+  quoted:
+    input: { type: object }
+    system: 'Use {{known}}.'
+    body: "Say {{ x }}."
+  literal:
+    input:
+      type: object
+      properties:
+        issue: { type: string }
+    body: |
+      # Fix
+
+      Close {{{issue}}} and \{{literal}}.
+      ```
+      echo \\{{fenced}}
+      ```
+  folded:
+    input:
+      type: object
+      properties:
+        a: { type: string }
+    body: >
+      Fold {{a}}
+      and {{b}}.
+  bare:
+    body: Go {{ anything }}.
